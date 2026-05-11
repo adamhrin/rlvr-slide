@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>How RL teaches LLMs to reason</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
+  onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+<style>
+  :root { color-scheme: dark; }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .card { background: rgba(30,41,59,0.7); border: 1px solid rgba(148,163,184,0.18); border-radius: 12px; }
+  .pulse-arrow { animation: pulse 1.4s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 0.45 } 50% { opacity: 1 } }
+  .reveal { transition: opacity .45s ease, transform .45s ease; }
+  .hidden-init { opacity: 0; transform: translateY(6px); }
+  .shown { opacity: 1; transform: translateY(0); }
+  .tether { stroke-dasharray: 4 4; animation: dash 1.2s linear infinite; }
+  @keyframes dash { to { stroke-dashoffset: -16; } }
+  .chip { display:inline-flex; align-items:center; gap:.25rem; padding:.15rem .5rem; border-radius:9999px; font-size:.7rem; }
+  .grad-text { background: linear-gradient(90deg,#a78bfa,#60a5fa); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  details > summary { cursor: pointer; list-style: none; }
+  details > summary::-webkit-details-marker { display:none }
+  .typing::after { content:'▌'; animation: blink 1s steps(1) infinite; opacity:.6; margin-left:1px; }
+  @keyframes blink { 50% { opacity:0; } }
+  .scrub::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border-radius: 50%; background: #a78bfa; cursor: pointer; box-shadow: 0 0 0 3px rgba(167,139,250,.25); }
+  .scrub { appearance: none; height: 6px; background: linear-gradient(90deg,#7c3aed 0%, #1e293b 100%); border-radius: 9999px; }
+
+</style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+<div x-data="rlvrSlide()" x-init="init()" class="max-w-7xl mx-auto px-5 py-3">
+
+  <!-- ====== Header ====== -->
+  <header class="flex items-center justify-between mb-3">
+    <div>
+      <div class="text-[10px] uppercase tracking-widest text-slate-400">Open-source LLM research, peek inside</div>
+      <h1 class="text-xl md:text-2xl font-semibold leading-tight">
+        How <span class="grad-text">RL with verifiable rewards</span> teaches LLMs to reason
+      </h1>
+    </div>
+    <div class="flex items-center gap-3 text-sm">
+      <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
+        <span class="text-xs text-slate-400">show math</span>
+        <span class="relative inline-block w-9 h-5">
+          <input type="checkbox" x-model="showMath" class="sr-only peer">
+          <span class="absolute inset-0 bg-slate-700 rounded-full peer-checked:bg-violet-500 transition"></span>
+          <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-4"></span>
+        </span>
+      </label>
+    </div>
+  </header>
+
+  <!-- ====== Act tabs ====== -->
+  <nav class="flex gap-2 mb-3 text-sm">
+    <template x-for="(t,i) in acts" :key="i">
+      <button
+        @click="act = i+1"
+        :class="act === i+1 ? 'bg-violet-500/20 border-violet-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+        class="px-3 py-1.5 rounded-lg border transition">
+        <span class="text-xs text-slate-500 mr-1.5" x-text="'Act ' + (i+1)"></span>
+        <span x-text="t"></span>
+      </button>
+    </template>
+  </nav>
+
+  <!-- =================================================================== -->
+  <!-- ============================  ACT 1  ============================== -->
+  <!-- =================================================================== -->
+  <section x-show="act === 1" class="space-y-4" @keydown.window.arrow-right="nextStep()" @keydown.window.arrow-left="prevStep()">
+
+    <!-- Top controls -->
+    <div class="card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400">Sample</span>
+        <template x-for="s in samples" :key="s.id">
+          <button @click="setSample(s.id)"
+            :class="sample === s.id ? 'bg-blue-500/20 border-blue-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="s.label"></button>
+        </template>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400">Algo</span>
+        <template x-for="a in algos" :key="a.id">
+          <button @click="algo = a.id; restart()"
+            :class="algo === a.id ? 'bg-emerald-500/20 border-emerald-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="a.label"></button>
+        </template>
+      </div>
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-slate-400">Reward</span>
+        <template x-for="r in rewards" :key="r.id">
+          <button @click="if(rewardAllowed(r.id)){reward=r.id; restart();}"
+            :disabled="!rewardAllowed(r.id)"
+            :class="[
+              reward === r.id ? 'bg-amber-500/20 border-amber-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200',
+              rewardAllowed(r.id) ? '' : 'opacity-30 cursor-not-allowed'
+            ]"
+            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="r.label"></button>
+        </template>
+      </div>
+    </div>
+
+    <!-- Step navigator -->
+    <div class="card p-2 flex items-center gap-2">
+      <button @click="prevStep()" :disabled="step <= 1"
+              class="px-2 py-1 rounded border border-slate-700 text-slate-300 disabled:opacity-30 text-xs">◀</button>
+      <div class="flex-1 text-center leading-tight">
+        <span class="text-[10px] text-slate-500 mr-1.5">Step <span class="text-violet-300 mono" x-text="step"></span>/<span class="mono" x-text="totalSteps()"></span></span>
+        <span class="text-sm font-medium text-slate-200" x-text="stepName(step)"></span>
+        <span class="text-[10px] text-slate-600 ml-2">(← / → keys)</span>
+      </div>
+      <button @click="restart()" class="px-2 py-1 rounded border border-slate-700 text-slate-400 text-xs">⟲</button>
+      <button @click="nextStep()" :disabled="step >= totalSteps()"
+              class="px-3 py-1 rounded bg-violet-500 text-white disabled:opacity-30 text-xs">Next ▸</button>
+    </div>
+
+    <!-- ===== Pipeline (GRPO/PPO branch) ===== -->
+    <div x-show="algo !== 'dpo'" class="card p-3 space-y-3">
+
+      <!-- ─── Step 1: Prompt + π_θ feed ─── -->
+      <div :class="step >= 1 ? 'opacity-100' : 'opacity-25'" class="transition-opacity duration-500">
+        <div class="grid grid-cols-12 gap-3 items-center">
+          <div class="col-span-2 text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 1</div>
+            <div class="text-xs text-blue-300 mt-0.5">Prompt</div>
+          </div>
+          <div class="col-span-10 flex items-center gap-2">
+            <div class="flex-1 bg-slate-800/60 border border-blue-500/40 rounded-lg px-3 py-1.5 text-sm" x-text="currentSample().prompt"></div>
+            <span class="text-slate-500 text-xs">→</span>
+            <div class="px-2 py-1 rounded bg-violet-500/10 border border-violet-400/40 text-xs whitespace-nowrap mono">
+              π<sub>θ</sub><span x-show="algo==='ppo'" class="text-emerald-300"> + V<sub>φ</sub></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Step 2: Rollouts (also hosts the per-token hover overlay when step≥4) ─── -->
+      <div :class="step >= 2 ? 'opacity-100' : 'opacity-25'" class="transition-opacity duration-500 relative">
+        <div class="grid grid-cols-12 gap-3 items-start">
+          <div class="col-span-2 text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 2</div>
+            <div class="text-xs text-violet-300 mt-0.5">Rollouts</div>
+            <div class="text-[10px] text-slate-500 mt-0.5 mono" x-text="'G = ' + currentSample().rollouts.length"></div>
+            <div x-show="step >= 4" class="text-[10px] text-violet-400 mt-1.5 italic leading-tight">
+              hover any token<br>↓
+            </div>
+          </div>
+          <div class="col-span-10 grid grid-cols-1 md:grid-cols-5 gap-2"
+               @mouseleave="hoverInfo.visible = false">
+            <template x-for="(r,i) in currentSample().rollouts" :key="sample + '-' + i">
+              <div class="rounded-lg p-2 text-xs flex flex-col gap-1 border transition-all duration-700"
+                   :style="`transition-delay: ${step === 2 ? i * 140 : 0}ms;
+                           opacity: ${step >= 2 ? 1 : 0.05};
+                           transform: translateY(${step >= 2 ? '0' : '8px'});
+                           background: ${rolloutBg(i)};
+                           border-color: ${rolloutBorder(i)};`">
+                <div class="flex items-center justify-between">
+                  <div class="mono text-slate-500" x-text="'r' + (i+1)"></div>
+                  <div x-show="step >= 3" class="reveal shown">
+                    <span class="text-base leading-none"
+                          :class="r.reward >= 0.7 ? 'text-emerald-300' : (r.reward >= 0.3 ? 'text-amber-300' : 'text-rose-300')"
+                          x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></span>
+                  </div>
+                </div>
+                <div :class="sample === 'code' ? 'text-slate-200 mono text-[10.5px] leading-snug whitespace-pre-wrap' : 'text-slate-200 leading-snug'">
+                  <template x-if="step < 4">
+                    <span x-text="r.text"></span>
+                  </template>
+                  <template x-if="step >= 4">
+                    <span>
+                      <template x-for="(tok,j) in r.text.split(/(\s+)/)" :key="j">
+                        <span class="rounded px-px transition-colors duration-700"
+                              :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-violet-400/60 hover:ring-offset-0' : ''"
+                              :style="`background-color: ${tokenShade(i, tok)}`"
+                              @mouseenter="onTokenHover(i, j, tok)"
+                              x-text="tok"></span>
+                      </template>
+                    </span>
+                  </template>
+                </div>
+                <div x-show="step >= 3" class="text-[10px] mono text-slate-500 border-t border-slate-700/60 pt-1 mt-0.5">
+                  <template x-if="r.tests">
+                    <div class="flex items-center gap-2">
+                      <div class="flex gap-0.5">
+                        <template x-for="(passed, ti) in r.tests" :key="ti">
+                          <span :class="passed ? 'text-emerald-400' : 'text-rose-400'"
+                                :title="'test ' + (ti+1)"
+                                x-text="passed ? '✓' : '✗'"></span>
+                        </template>
+                      </div>
+                      <span class="text-slate-400" x-text="r.answer"></span>
+                      <span class="ml-auto text-slate-500" x-text="'r=' + r.reward.toFixed(1)"></span>
+                    </div>
+                  </template>
+                  <template x-if="!r.tests">
+                    <span>→ <span class="text-slate-300" x-text="r.answer"></span></span>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- ===== HOVER POPOVER (overlays everything below; pointer-events:none) ===== -->
+        <div class="absolute z-50 left-1/2 -translate-x-1/2 pointer-events-none transition-opacity duration-200"
+             :class="hoverInfo.visible && step >= 4 ? 'opacity-100' : 'opacity-0'"
+             style="top: 100%; margin-top: 8px; width: 540px; max-width: calc(100% - 32px);">
+          <div class="bg-slate-900/95 backdrop-blur border border-violet-400/50 rounded-lg p-3 text-xs shadow-2xl space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="mono text-violet-200 font-medium" x-text="'rollout r' + (hoverInfo.rolloutIdx + 1)"></span>
+                <span class="text-slate-500">·</span>
+                <span class="text-slate-400">model chose</span>
+                <span class="mono text-amber-300" x-text="'“' + hoverInfo.token + '”'"></span>
+              </div>
+              <div class="mono text-[11px] px-1.5 py-0.5 rounded"
+                   :class="hoverAdv() >= 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
+                   x-text="'A = ' + (hoverAdv() >= 0 ? '+' : '') + hoverAdv().toFixed(2)"></div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-[10.5px] leading-snug text-slate-300">
+              <span class="text-slate-500 text-[9px] uppercase tracking-wider mr-1.5">context →</span>
+              <span x-text="hoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
+            </div>
+            <div class="space-y-1">
+              <template x-for="(c, ci) in hoverPanelData().candidates" :key="ci">
+                <div class="flex items-center gap-2">
+                  <div class="mono text-[11px] w-20 text-right truncate"
+                       :class="c.isChosen ? 'text-amber-300 font-medium' : 'text-slate-400'">
+                    <span x-show="c.isChosen" class="text-amber-400">★ </span>
+                    <span x-text="'“' + c.tok + '”'"></span>
+                  </div>
+                  <div class="flex-1 relative h-4 bg-slate-800 rounded overflow-hidden">
+                    <div class="absolute inset-y-0 left-0 border-r border-slate-500/50"
+                         :style="`width: ${c.p * 100 * 1.6}%`"></div>
+                    <div class="absolute inset-y-0 left-0 transition-all duration-500 rounded"
+                         :style="`width: ${hoverAfter(ci) * 100 * 1.6}%; background: ${hoverBarColor(ci)}`"></div>
+                  </div>
+                  <div class="mono text-[10px] flex items-center gap-1 w-28 justify-end">
+                    <span class="text-slate-500" x-text="(c.p * 100).toFixed(0) + '%'"></span>
+                    <span class="text-slate-600">→</span>
+                    <span :class="hoverDelta(ci) > 0.0001 ? 'text-emerald-300' : (hoverDelta(ci) < -0.0001 ? 'text-rose-300' : 'text-slate-400')"
+                          x-text="(hoverAfter(ci) * 100).toFixed(0) + '%'"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="text-[10px] text-slate-500 italic">
+              Magnitudes ~30× exaggerated for visibility. Real per-step shifts are tiny — that's why we run this 100,000+ times (Act 2).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Step 3: Score ─── -->
+      <div :class="step >= 3 ? 'opacity-100' : 'opacity-15'" class="transition-opacity duration-500">
+        <div class="grid grid-cols-12 gap-3 items-start">
+          <div class="col-span-2 text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 3</div>
+            <div class="text-xs text-amber-300 mt-0.5">Score</div>
+          </div>
+          <div class="col-span-10 bg-slate-800/40 border border-amber-500/30 rounded-lg p-3 text-xs space-y-2.5">
+
+            <!-- Code sample: show actual pytest sandbox + assert list -->
+            <template x-if="sample === 'code' && currentSample().unitTests">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🐍 Python sandbox · pytest</div>
+                  <span class="text-slate-400">each rollout's function is executed against this test suite:</span>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug">
+                  <template x-for="(t, ti) in currentSample().unitTests" :key="ti">
+                    <div class="text-slate-300">
+                      <span class="text-slate-500" x-text="'test ' + (ti+1) + ': '"></span>
+                      <span x-text="t"></span>
+                    </div>
+                  </template>
+                </div>
+                <div class="text-slate-400 text-[11px]">
+                  reward = (# tests passed) / 5 — each rollout's pass/fail row is shown above ↑ on its function card.
+                </div>
+              </div>
+            </template>
+
+            <!-- Math / Creative: keep the original verdict-tile layout -->
+            <template x-if="sample !== 'code' || !currentSample().unitTests">
+              <div class="space-y-2">
+                <div class="flex items-center gap-3 flex-wrap">
+                  <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono" x-text="rewardSourceLabel()"></div>
+                  <span class="text-slate-300" x-text="rewardSourceDescription()"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-slate-400">Ground truth:</span>
+                  <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-200 mono" x-text="currentSample().gt"></span>
+                </div>
+                <div class="grid grid-cols-5 gap-2 text-center">
+                  <template x-for="(r,i) in currentSample().rollouts" :key="i">
+                    <div class="bg-slate-900/50 rounded p-1.5">
+                      <div class="text-[10px] mono text-slate-500" x-text="'r' + (i+1)"></div>
+                      <div class="mono text-slate-200 text-xs my-0.5" x-text="r.answer"></div>
+                      <div class="text-base"
+                           :class="r.reward >= 0.7 ? 'text-emerald-400' : (r.reward >= 0.3 ? 'text-amber-400' : 'text-rose-400')"
+                           x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></div>
+                      <div class="text-[10px] mono text-slate-500" x-text="'r=' + r.reward.toFixed(2)"></div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Step 4: Advantage + per-token nudges ─── -->
+      <div :class="step >= 4 ? 'opacity-100' : 'opacity-15'" class="transition-opacity duration-500">
+        <div class="grid grid-cols-12 gap-3 items-start">
+          <div class="col-span-2 text-right">
+            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 4</div>
+            <div class="text-xs text-purple-300 mt-0.5">Advantage</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">+ token nudges</div>
+          </div>
+          <div class="col-span-10 bg-slate-800/40 border border-purple-500/30 rounded-lg p-2.5 text-xs space-y-2">
+            <div class="text-slate-300 leading-snug">
+              <span x-show="algo==='grpo'">
+                <strong class="text-emerald-300">GRPO:</strong> take the average reward of the group as a baseline. Each rollout's <em>advantage</em> is how much it beat (or lost to) that average. No critic network needed.
+              </span>
+              <span x-show="algo==='ppo'">
+                <strong class="text-emerald-300">PPO:</strong> a separate critic <span class="mono">V<sub>φ</sub></span> learns to predict expected reward from this prompt. Advantage = reward − critic's prediction. (Pictured: we use the group mean as a stand-in.)
+              </span>
+              That advantage becomes the <em>sign and strength</em> of the gradient nudge for every token in the rollout — green ↑ above, red ↓ above.
+              <strong class="text-violet-200">Hover any token to see its actual top-5 prediction shift.</strong>
+            </div>
+
+            <!-- Bar chart (compact) -->
+            <div class="relative bg-slate-900/40 rounded p-2" style="height: 110px;">
+              <div class="absolute left-1 top-1 text-[9px] text-slate-500">reward</div>
+              <div class="absolute left-2 right-2 border-t border-dashed border-amber-400/80 z-10"
+                   :style="`top: ${8 + (1 - groupStats().mean) * 80}px`">
+                <span class="absolute -top-3.5 left-0 text-[10px] text-amber-300 mono"
+                      x-text="(algo === 'ppo' ? 'critic V_φ ≈ ' : 'average rollout  μ = ') + groupStats().mean.toFixed(2) + (algo === 'ppo' ? '   (group-mean stand-in)' : '')"></span>
+              </div>
+              <div class="absolute inset-0 px-2 pt-2 pb-5 flex items-end justify-around gap-2">
+                <template x-for="(r,i) in currentSample().rollouts" :key="i">
+                  <div class="flex flex-col items-center" style="width: 18%; height: 100%;">
+                    <div class="flex-1 w-full flex flex-col justify-end items-center">
+                      <div class="text-[10px] mono mb-0.5"
+                           :class="groupStats().adv[i] >= 0 ? 'text-emerald-300' : 'text-rose-300'"
+                           x-text="(groupStats().adv[i] >= 0 ? '+' : '') + groupStats().adv[i].toFixed(2)"></div>
+                      <div class="w-full transition-all duration-700 rounded-t"
+                           :class="groupStats().adv[i] >= 0 ? 'bg-emerald-500/70' : 'bg-rose-500/70'"
+                           :style="`height: ${r.reward * 80}px`"></div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-0.5" x-text="'r' + (i+1)"></div>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <div x-show="showMath" class="mono text-slate-300 space-y-0.5 text-[11px]">
+              <div x-text="'rewards = [' + currentSample().rollouts.map(r=>r.reward.toFixed(2)).join(', ') + '],  μ = ' + groupStats().mean.toFixed(2) + ',  σ = ' + groupStats().std.toFixed(2)"></div>
+              <div class="text-purple-300" x-text="'advantages A_i = (r_i − μ)/σ = [' + groupStats().adv.map(a=>(a>=0?'+':'')+a.toFixed(2)).join(', ') + ']'"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ─── Info boxes (collapsed by default) ─── -->
+      <div class="grid grid-cols-12 gap-3 items-start pt-1">
+        <div class="col-span-2 text-right">
+          <div class="text-[10px] uppercase tracking-wider text-slate-500">Want more?</div>
+          <div class="text-[10px] text-slate-500">click any →</div>
+        </div>
+        <div class="col-span-10 grid grid-cols-2 md:grid-cols-4 gap-2">
+          <details class="bg-slate-800/40 border border-cyan-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
+            <summary class="text-cyan-200 font-medium">⛓ KL leash</summary>
+            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
+              At every update we also add a penalty β·KL(π<sub>θ</sub> ∥ π<sub>ref</sub>) — π<sub>ref</sub> is a frozen copy (usually the SFT init).
+              Without it, the model can drift into degenerate strategies that game the reward but produce gibberish.
+              <span x-show="showMath" class="block mt-1">$$\mathcal{L} = \mathcal{L}^{\text{clip}} - \beta\,\text{KL}(\pi_\theta \| \pi_{\text{ref}})$$</span>
+            </div>
+          </details>
+          <details class="bg-slate-800/40 border border-violet-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
+            <summary class="text-violet-200 font-medium">✂ Clipping</summary>
+            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
+              The actual loss uses an <em>importance ratio</em> ρ = π<sub>θ</sub>(token) / π<sub>θ_old</sub>(token), clipped to [1−ε, 1+ε] (ε≈0.2).
+              This prevents a single update from changing token probabilities by more than ~20%, which keeps training stable.
+              <span x-show="showMath" class="block mt-1">$$\mathcal{L}^{\text{clip}} = \mathbb{E}[\min(\rho A,\;\text{clip}(\rho,1-\epsilon,1+\epsilon)A)]$$</span>
+            </div>
+          </details>
+          <details class="bg-slate-800/40 border border-emerald-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
+            <summary class="text-emerald-200 font-medium">⚖ GRPO vs PPO</summary>
+            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
+              PPO trains a second network — a critic <span class="mono">V<sub>φ</sub></span> — to predict expected reward, and uses that as the baseline.
+              GRPO drops the critic entirely and uses the group's mean reward instead. Cheaper, simpler, surprisingly competitive.
+              The trade-off: PPO can give per-token (per-state) baselines via GAE; GRPO's baseline is per-prompt only.
+            </div>
+          </details>
+          <details class="bg-slate-800/40 border border-rose-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
+            <summary class="text-rose-200 font-medium">⚠ Per-token caveat</summary>
+            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
+              In GRPO every token in a rollout gets the <em>same</em> advantage signal (uniform shading above).
+              This is the credit-assignment problem: a "bad" rollout penalizes <em>all</em> its tokens equally, even ones that were fine in isolation.
+              Process reward models (PRMs) try to fix this by scoring intermediate steps — but they're hard to build well.
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DPO branch ===== -->
+    <div x-show="algo === 'dpo'" class="card p-5 space-y-4">
+      <div class="text-xs text-slate-400 italic">DPO is fundamentally different — no rollouts, no reward model. Click through to compare.</div>
+      <div :class="step >= 1 ? 'opacity-100' : 'opacity-25'" class="transition-opacity">
+        <div class="text-xs uppercase tracking-wider text-slate-500 mb-1">Step 1: a (prompt, chosen, rejected) triple from a fixed dataset</div>
+        <div class="bg-slate-800/60 border border-blue-500/40 rounded-lg p-3 text-sm" x-text="currentSample().prompt"></div>
+      </div>
+      <div :class="step >= 2 ? 'opacity-100' : 'opacity-25'" class="transition-opacity">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-3 text-sm">
+            <div class="text-emerald-300 text-xs mb-1">CHOSEN</div>
+            <div class="whitespace-pre-wrap" x-text="currentSample().chosen"></div>
+          </div>
+          <div class="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-sm">
+            <div class="text-rose-300 text-xs mb-1">REJECTED</div>
+            <div class="whitespace-pre-wrap" x-text="currentSample().rejected"></div>
+          </div>
+        </div>
+      </div>
+      <div :class="step >= 3 ? 'opacity-100' : 'opacity-25'" class="transition-opacity">
+        <div class="bg-slate-800/40 border border-purple-500/30 rounded-lg p-3 text-xs">
+          <div class="text-purple-200 font-medium mb-1">Step 3: push π<sub>θ</sub> toward chosen, away from rejected</div>
+          <div x-show="!showMath" class="text-slate-300">
+            The loss raises the log-probability of the chosen answer and lowers the log-probability of the rejected answer — relative to the frozen π<sub>ref</sub>.
+            No environment, no rollouts, no separate reward model.
+          </div>
+          <div x-show="showMath" class="mt-1">
+            $$ \mathcal{L}_{\text{DPO}} = -\log \sigma\!\left( \beta \log \frac{\pi_\theta(y_w)}{\pi_{\text{ref}}(y_w)} - \beta \log \frac{\pi_\theta(y_l)}{\pi_{\text{ref}}(y_l)} \right) $$
+          </div>
+        </div>
+      </div>
+      <div :class="step >= 4 ? 'opacity-100' : 'opacity-25'" class="transition-opacity text-xs text-slate-400 italic">
+        DPO collapses the whole RL loop into a supervised contrastive objective. Cheaper, more stable —
+        but you can't react to the model's own evolving outputs and you need a curated preference dataset.
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== -->
+  <!-- ============================  ACT 2  ============================== -->
+  <!-- =================================================================== -->
+  <section x-show="act === 2" class="grid grid-cols-12 gap-5">
+
+    <div class="col-span-12 card p-4">
+      <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div class="text-sm text-slate-300">Now run that loop <span class="text-violet-300 font-medium">tens of thousands of times</span>.</div>
+        <div class="ml-auto flex items-center gap-3">
+          <button @click="ffPlay()" class="px-3 py-1.5 rounded-md bg-violet-500 text-white text-sm">
+            <span x-text="ffPlaying ? '⏸ Pause' : '▶ Fast-forward training'"></span>
+          </button>
+          <button @click="ffStep=0; ffPlaying=false" class="px-3 py-1.5 rounded-md border border-slate-700 text-slate-300 text-sm">Reset</button>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <input type="range" min="0" :max="ffSnapshots.length-1" step="1" x-model.number="ffStep"
+               @input="ffPlaying=false"
+               class="scrub flex-1" />
+        <div class="mono text-xs text-slate-400 w-32 text-right" x-text="'training step ≈ ' + currentSnapshot().step.toLocaleString()"></div>
+      </div>
+    </div>
+
+    <!-- Reward curve -->
+    <div class="col-span-12 lg:col-span-7 card p-4">
+      <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Pass rate on held-out math problems</div>
+      <svg viewBox="0 0 600 280" class="w-full h-64">
+        <!-- axes -->
+        <line x1="50" y1="240" x2="580" y2="240" stroke="#475569"/>
+        <line x1="50" y1="20"  x2="50"  y2="240" stroke="#475569"/>
+        <!-- y-axis labels -->
+        <template x-for="t in [0,25,50,75,100]" :key="t">
+          <g>
+            <text :x="40" :y="240 - t*2.2 + 3" fill="#64748b" font-size="10" text-anchor="end" x-text="t + '%'"></text>
+            <line :x1="50" :y1="240 - t*2.2" :x2="580" :y2="240 - t*2.2" stroke="#1e293b"/>
+          </g>
+        </template>
+        <!-- x-axis labels -->
+        <template x-for="(snap,i) in ffSnapshots" :key="i">
+          <text :x="50 + i*(530/(ffSnapshots.length-1))" y="258" fill="#64748b" font-size="10" text-anchor="middle"
+                x-text="snap.step >= 1000 ? (snap.step/1000) + 'k' : snap.step"></text>
+        </template>
+        <text x="315" y="275" fill="#94a3b8" font-size="11" text-anchor="middle">training steps</text>
+        <!-- curve -->
+        <polyline
+          :points="ffSnapshots.map((s,i)=> (50 + i*(530/(ffSnapshots.length-1))) + ',' + (240 - s.acc*2.2)).join(' ')"
+          fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linejoin="round"/>
+        <!-- length curve (response length) -->
+        <polyline
+          :points="ffSnapshots.map((s,i)=> (50 + i*(530/(ffSnapshots.length-1))) + ',' + (240 - Math.min(100, s.length/8)*2.2)).join(' ')"
+          fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>
+        <!-- current marker -->
+        <g>
+          <line :x1="50 + ffStep*(530/(ffSnapshots.length-1))" y1="20"
+                :x2="50 + ffStep*(530/(ffSnapshots.length-1))" y2="240" stroke="#a78bfa" stroke-dasharray="3 3" opacity="0.5"/>
+          <circle :cx="50 + ffStep*(530/(ffSnapshots.length-1))"
+                  :cy="240 - currentSnapshot().acc*2.2" r="6" fill="#a78bfa"/>
+        </g>
+        <!-- legend -->
+        <g transform="translate(420,30)">
+          <line x1="0" y1="6" x2="20" y2="6" stroke="#a78bfa" stroke-width="2.5"/>
+          <text x="26" y="10" fill="#cbd5e1" font-size="11">pass rate</text>
+          <line x1="0" y1="22" x2="20" y2="22" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 3"/>
+          <text x="26" y="26" fill="#cbd5e1" font-size="11">avg response length (×8 tok)</text>
+        </g>
+      </svg>
+      <div class="text-xs text-slate-400 italic mt-2">
+        Illustrative shape (matches the qualitative behavior reported by DeepSeek-R1, Qwen-Math, Tülu-3, and others).
+        Notice the response length quietly climbing — the model discovers, on its own, that <em>thinking longer helps</em>.
+      </div>
+    </div>
+
+    <!-- Evolving completion -->
+    <div class="col-span-12 lg:col-span-5 card p-4 flex flex-col">
+      <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Same prompt, different training step</div>
+      <div class="bg-slate-800/60 border border-blue-500/30 rounded-lg p-3 text-sm mb-3">
+        <span class="text-xs text-blue-300 mr-2">PROMPT</span>
+        If $a + b = 7$ and $ab = 12$, what is $a^2 + b^2$?
+      </div>
+      <div class="text-xs text-slate-400 mb-1">
+        <span class="mono text-violet-300" x-text="'step ≈ ' + currentSnapshot().step.toLocaleString()"></span>
+        — <span x-text="currentSnapshot().label"></span>
+      </div>
+      <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-3 text-sm font-mono whitespace-pre-wrap leading-relaxed flex-1 min-h-[200px]"
+           x-text="currentSnapshot().completion"></div>
+      <div class="text-xs mt-2">
+        <span class="chip" :class="currentSnapshot().correct ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
+              x-text="currentSnapshot().correct ? '✓ correct (r = 1)' : '✗ incorrect (r = 0)'"></span>
+        <span class="text-slate-500 ml-2" x-text="'~ ' + currentSnapshot().length + ' tokens'"></span>
+      </div>
+    </div>
+
+    <div class="col-span-12 card p-4 text-sm text-slate-300">
+      <div class="font-medium text-violet-200 mb-1">The punchline</div>
+      Each loop nudges the model by a tiny amount. Done a few hundred thousand times — across thousands of math, code, and logic problems —
+      those nudges compound into the long, self-correcting chains of reasoning we see in models like DeepSeek-R1, Qwen-3 reasoning, GPT-o-series, and Claude's extended thinking.
+      No-one explicitly taught the model to say <em>"wait, let me reconsider."</em> The verifier just kept rewarding rollouts that arrived at the right answer,
+      and the model figured out that going slow and checking its work was the strategy with the highest expected reward.
+    </div>
+  </section>
+
+  <!-- =================================================================== -->
+  <!-- ============================  ACT 3  ============================== -->
+  <!-- =================================================================== -->
+  <section x-show="act === 3" class="grid grid-cols-12 gap-5">
+    <div class="col-span-12">
+      <h2 class="text-xl font-semibold mb-1">…and yet, what we don't know</h2>
+      <p class="text-sm text-slate-400 max-w-3xl">
+        The mechanics above are well understood. The deeper questions about <em>why</em> this works as well as it does, and where it breaks, are very much open.
+        Honest version of the slide:
+      </p>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 1</div>
+      <div class="font-medium mb-2">Does RL <em>teach</em> reasoning, or just <em>elicit</em> it?</div>
+      <div class="text-sm text-slate-300">
+        On many benchmarks, <span class="mono">pass@1</span> improves dramatically after RL — but <span class="mono">pass@k</span> at large k often doesn't.
+        That suggests RL is sharpening behaviors the base model could already produce sometimes,
+        not adding fundamentally new skills. We don't yet have a clean test that settles it either way.
+      </div>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 2</div>
+      <div class="font-medium mb-2">Reward hacking is real and weird</div>
+      <div class="text-sm text-slate-300">
+        Models discover shortcuts: padding answers with reasoning theater that doesn't change the conclusion,
+        gaming format checks, exploiting bugs in the verifier, or — with LLM judges — learning what the judge <em>likes</em>
+        rather than what's actually correct. The KL leash helps; it doesn't fix it.
+      </div>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 3</div>
+      <div class="font-medium mb-2">Most of what we want isn't verifiable</div>
+      <div class="text-sm text-slate-300">
+        "Was this email helpful? Was this story good? Was that answer safe?" — there's no <span class="mono">\boxed{}</span> to check.
+        For those domains we fall back to <em>preference</em> learning (RLHF, DPO) or <em>generative reward models</em> (an LLM scoring against a rubric).
+        Whether the reasoning gains from verifiable RL <em>transfer</em> to these messier domains is an active area of research.
+      </div>
+    </div>
+
+    <div class="col-span-12 card p-4 text-sm text-slate-300">
+      <div class="font-medium text-violet-200 mb-1">The takeaway</div>
+      A simple loop — generate a few attempts, score them with a checker, nudge the model toward the better ones —
+      is the engine behind a lot of the reasoning ability of today's frontier models.
+      It's not magic; the math fits on one slide. But it works astonishingly well at scale,
+      and the open-source community is still mapping out exactly why and exactly where.
+    </div>
+  </section>
+
+  <footer class="text-xs text-slate-500 mt-8 flex items-center justify-between">
+    <div>Built for non-technical audiences with the math one toggle away. All numbers and completions are illustrative.</div>
+    <div class="mono">RLVR · GRPO · PPO · DPO</div>
+  </footer>
+</div>
+
+<script>
+function rlvrSlide() {
+  return {
+    // ===== state =====
+    act: 1,
+    showMath: false,
+    sample: 'math',
+    algo: 'grpo',
+    reward: 'verifier',
+    step: 1,            // 1..4 click-driven reveal for Act 1
+    hoverInfo: {visible: false, rolloutIdx: 0, tokenIdx: 0, token: ''},
+    ffStep: 0,
+    ffPlaying: false,
+    _ffTimer: null,
+
+    acts: ['One sample, one step', 'Now do it 100,000 times', "What we don't know"],
+
+    algos: [
+      {id:'grpo', label:'GRPO', name:'Group Relative Policy Optimization',
+       pitch: 'DeepSeek\'s simplification of PPO: drop the critic network and use the group of rollouts as the baseline.',
+       why: 'Cheaper to train (one model instead of two), and the group baseline turns out to be a low-variance estimator when rewards are sparse.'},
+      {id:'ppo', label:'PPO', name:'Proximal Policy Optimization',
+       pitch: 'The classic. A separate critic network V_φ predicts expected reward; advantage is reward minus that prediction.',
+       why: 'Critic-based estimates can be lower-variance per-token, but you pay for a second network and the critic itself can be noisy.'},
+      {id:'dpo', label:'DPO', name:'Direct Preference Optimization',
+       pitch: 'No rollouts. No reward model. A supervised contrastive loss over pre-existing (chosen, rejected) pairs.',
+       why: 'Far cheaper and more stable than online RL. Trade-off: you can\'t adapt to the model\'s own evolving outputs, and you need a preference dataset.'},
+    ],
+
+    rewards: [
+      {id:'verifier', label:'Verifier (math/code)'},
+      {id:'judge', label:'LLM-as-judge'},
+      {id:'preference', label:'Preference RM (RLHF)'},
+    ],
+
+    samples: [
+      {
+        id: 'math', label: 'Math',
+        prompt: "If 3x + 7 = 22, what is x?",
+        gt: "5",
+        chosen: "Subtract 7 from both sides: 3x = 15. Divide by 3: x = 5.",
+        rejected: "x = 22/3 - 7 ≈ 0.33 (forgot to subtract 7 first).",
+        rollouts: [
+          {text: "Subtract 7: 3x = 15. Divide by 3, so x = 5.", answer: "5", reward: 1.0},
+          {text: "3x = 22 - 7 = 15, so x = 15/3 = 5.", answer: "5", reward: 1.0},
+          {text: "3x + 7 = 22 means 3x = 29 so x ≈ 9.67.", answer: "9.67", reward: 0.0},
+          {text: "Move 7 over: 3x = 15. Therefore x = 5.", answer: "5", reward: 1.0},
+          {text: "x = 22/3 - 7 = 0.33.", answer: "0.33", reward: 0.0},
+        ],
+      },
+      {
+        id: 'code', label: 'Code',
+        prompt: "Write is_palindrome(s) — case-insensitive, ignore non-alphanumerics.",
+        gt: "passes all 5 unit tests",
+        chosen: "def is_palindrome(s):\n    t = ''.join(c.lower() for c in s if c.isalnum())\n    return t == t[::-1]",
+        rejected: "def is_palindrome(s):\n    return s == s[::-1]   # ignores case + punctuation",
+        unitTests: [
+          'assert is_palindrome("aba")',
+          'assert is_palindrome("A man a plan a canal Panama")',
+          'assert not is_palindrome("abc")',
+          'assert is_palindrome("")',
+          'assert is_palindrome("Race car")',
+        ],
+        rollouts: [
+          { text: "def is_palindrome(s):\n    t = ''.join(c.lower() for c in s if c.isalnum())\n    return t == t[::-1]",
+            tests: [true, true, true, true, true],  reward: 1.0, answer: "5/5 pass" },
+          { text: "def is_palindrome(s):\n    s = ''.join(c.lower() for c in s if c.isalnum())\n    i, j = 0, len(s)-1\n    while i < j:\n        if s[i] != s[j]: return False\n        i, j = i+1, j-1\n    return True",
+            tests: [true, true, true, true, true],  reward: 1.0, answer: "5/5 pass" },
+          { text: "def is_palindrome(s):\n    return s == s[::-1]",
+            tests: [true, false, true, true, false], reward: 0.6, answer: "3/5 pass" },
+          { text: "def is_palindrome(s):\n    c = [x.lower() for x in s if x.isalnum()]\n    return c == c[::-1]",
+            tests: [true, true, true, true, true],  reward: 1.0, answer: "5/5 pass" },
+          { text: "def is_palindrome(s):\n    s = ''.join(c.lower() for c in s if c.isalnum())\n    for i in range(len(s)):\n        if s[i] != s[-i]: return False\n    return True",
+            tests: [false, false, true, true, false], reward: 0.4, answer: "2/5 pass" },
+        ],
+      },
+      {
+        id: 'creative', label: 'Creative',
+        prompt: "Write a 5-7-5 haiku about debugging a memory leak.",
+        gt: "judge rubric: meter, theme, imagery",
+        chosen: "Slow drip in the heap / each request a heavier pail / midnight, and OOM",
+        rejected: "I am debugging / there is a memory leak in / my web application",
+        rollouts: [
+          {text: "Slow drip in the heap / each request a heavier pail / midnight, and OOM", answer: "judge: 0.85", reward: 0.85},
+          {text: "Logs scroll past midnight / one allocation forgotten / sunrise still leaking", answer: "judge: 0.78", reward: 0.78},
+          {text: "I write some new code / it leaks memory once again / oh no please help me", answer: "judge: 0.30", reward: 0.30},
+          {text: "RAM grows like a vine / heap profiler shows the truth / one missing free call", answer: "judge: 0.72", reward: 0.72},
+          {text: "Memory go up / process dies in the morning / cron restart, repeat", answer: "judge: 0.45", reward: 0.45},
+        ],
+      },
+    ],
+
+    // ===== sample/reward coupling =====
+    rewardAllowed(rid) {
+      if (this.sample === 'creative') return rid !== 'verifier';   // no \boxed{} for haiku
+      return true;
+    },
+    setSample(id) {
+      this.sample = id;
+      if (!this.rewardAllowed(this.reward)) {
+        this.reward = (id === 'creative') ? 'judge' : 'verifier';
+      }
+      this.restart();
+    },
+
+    // ===== act 1 helpers =====
+    currentSample() { return this.samples.find(s => s.id === this.sample); },
+    currentAlgo()   { return this.algos.find(a => a.id === this.algo); },
+
+    rewardSourceLabel() {
+      if (this.reward === 'verifier') return this.sample === 'code' ? 'unit tests' : 'exact-answer match';
+      if (this.reward === 'judge')    return 'LLM judge + rubric';
+      return 'reward model π_RM (Bradley–Terry)';
+    },
+    rewardSourceDescription() {
+      if (this.reward === 'verifier' && this.sample === 'math')
+        return "Parse the rollout's final \\boxed{…}, compare to ground truth. Cheap, deterministic, hard to game.";
+      if (this.reward === 'verifier' && this.sample === 'code')
+        return "Run each rollout against a hidden test suite. Score = fraction of tests passed.";
+      if (this.reward === 'judge')
+        return "A frozen LLM scores each rollout against an explicit rubric (e.g. syllable count, theme, imagery). Cheap but gameable.";
+      return "A reward model trained from human pairwise preferences predicts a scalar 'humans would prefer this' score.";
+    },
+
+    groupStats() {
+      const rs = this.currentSample().rollouts.map(r => r.reward);
+      const mean = rs.reduce((a,b)=>a+b,0) / rs.length;
+      const variance = rs.reduce((a,b)=>a+(b-mean)**2,0) / rs.length;
+      const std = Math.max(1e-6, Math.sqrt(variance));
+      const adv = rs.map(r => (r - mean) / std);
+      return {mean, std, adv};
+    },
+
+    signalDescription() {
+      if (this.algo === 'dpo')
+        return 'A binary "chosen vs rejected" judgment per sampled pair. No reward scalar — just a relative preference.';
+      if (this.reward === 'verifier')
+        return 'A clean ground-truth signal: did the final answer match? This is what makes RLVR so effective on math/code.';
+      if (this.reward === 'judge')
+        return 'A learned, fuzzy signal from an LLM judge. Useful where verifiers don\'t exist, but susceptible to reward hacking.';
+      return 'A learned signal from a reward model trained on human preferences. The original RLHF setup.';
+    },
+
+    // ===== act 1 step navigation =====
+    totalSteps() { return 4; },
+    stepNames: {
+      grpo: ['Sample a prompt', 'Generate G rollouts', 'Score with verifier', 'Group advantage + per-token nudges'],
+      ppo:  ['Sample a prompt', 'Generate G rollouts', 'Score with verifier', 'Critic-based advantage + nudges'],
+      dpo:  ['Sample a (prompt, chosen, rejected) triple', 'See the two completions', 'Apply contrastive loss', 'No rollouts — just repeat'],
+    },
+    stepName(n) { return (this.stepNames[this.algo] || this.stepNames.grpo)[n - 1] || ''; },
+    nextStep() { if (this.step < this.totalSteps()) this.step++; this._mathRefresh(); },
+    prevStep() { if (this.step > 1) this.step--; this._mathRefresh(); },
+    restart()  { this.step = 1; this.hoverInfo.visible = false; this._mathRefresh(); },
+
+    // ===== token hover (replaces old step-5 zoom panel) =====
+    onTokenHover(rolloutIdx, tokenIdx, tok) {
+      if (this.step < 4) return;
+      const trimmed = (tok || '').trim();
+      if (!trimmed) return;
+      this.hoverInfo = {visible: true, rolloutIdx, tokenIdx, token: trimmed};
+    },
+    hoverContext() {
+      const rollout = this.currentSample().rollouts[this.hoverInfo.rolloutIdx];
+      if (!rollout) return '';
+      const parts = rollout.text.split(/(\s+)/);
+      const before = parts.slice(0, this.hoverInfo.tokenIdx).join('');
+      const prompt = this.currentSample().prompt.replace(/\s+/g, ' ').trim();
+      // Show prompt + " ⟫ " + rollout-so-far, truncated from the front if too long
+      let full = prompt + ' ⟫ ' + before;
+      const maxLen = 130;
+      if (full.length > maxLen) full = '…' + full.slice(-maxLen);
+      return full;
+    },
+    hoverAdv() { return this.groupStats().adv[this.hoverInfo.rolloutIdx] || 0; },
+    // Synthesize a plausible top-5 with the actually-hovered token as the model's pick (★).
+    // Scenery alternatives come from this rollout's curated anchor list, so they look
+    // contextually plausible. p_chosen is derived deterministically from the token so each
+    // token shows a visibly different distribution.
+    hoverPanelData() {
+      const tok = this.hoverInfo.token;
+      if (!tok) return {candidates: []};
+      const rolloutIdx = this.hoverInfo.rolloutIdx;
+      const sampleData = this.zoomData[this.sample] || [];
+      const anchor = sampleData[rolloutIdx] || sampleData[0] || {candidates: []};
+      // Pool of alternative tokens: this rollout's curated top-5, minus the hovered one
+      const pool = anchor.candidates.map(c => c.tok).filter(t => t !== tok);
+      // Fall back to other rollouts' tokens if pool is short
+      if (pool.length < 4) {
+        for (const other of sampleData) {
+          for (const c of other.candidates) {
+            if (c.tok !== tok && !pool.includes(c.tok)) pool.push(c.tok);
+            if (pool.length >= 4) break;
+          }
+          if (pool.length >= 4) break;
+        }
+      }
+      while (pool.length < 4) pool.push('(other)');
+      const alts = pool.slice(0, 4);
+      // Deterministic p_chosen ∈ [0.22, 0.46] based on token hash → varied per token
+      let h = 2166136261;
+      for (let i = 0; i < tok.length; i++) { h ^= tok.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+      const chosenP = 0.22 + ((h % 25) / 100);
+      // 4 alternatives get descending shares of the leftover mass; rest goes to "tail of vocab"
+      const remaining = (1 - chosenP) * 0.62;
+      const weights = [4, 3, 2, 1];
+      const wSum = weights.reduce((a, b) => a + b, 0);
+      return {
+        candidates: [
+          {tok, p: chosenP, isChosen: true},
+          ...alts.map((a, i) => ({tok: a, p: (weights[i] / wSum) * remaining + 0.015})),
+        ],
+      };
+    },
+
+    // ===== visual helpers =====
+    rolloutBg(i) {
+      // before scoring: neutral. After scoring (step >= 3) tint subtly by reward.
+      if (this.step < 3) return 'rgba(30,41,59,0.6)';
+      const r = this.currentSample().rollouts[i].reward;
+      if (r >= 0.7) return 'rgba(16,185,129,0.08)';
+      if (r >= 0.3) return 'rgba(245,158,11,0.08)';
+      return 'rgba(244,63,94,0.08)';
+    },
+    rolloutBorder(i) {
+      if (this.step < 3) return 'rgba(100,116,139,0.4)';
+      const r = this.currentSample().rollouts[i].reward;
+      if (r >= 0.7) return 'rgba(16,185,129,0.55)';
+      if (r >= 0.3) return 'rgba(245,158,11,0.45)';
+      return 'rgba(244,63,94,0.55)';
+    },
+    // ===== zoom (step 5): per-rollout, per-sample top-5 next-token distributions =====
+    // Each rollout has its OWN context + chosen token. Positive-advantage rollouts boost
+    // the (correct) chosen token; negative-advantage rollouts suppress the (wrong) chosen
+    // token, indirectly raising the correct alternative — credit assignment in action.
+    zoomData: {
+      math: [
+        // r1 (correct, A=+) — boost "15" as the right intermediate
+        { context: "If 3x + 7 = 22, what is x?\nSubtract 7: 3x = ",
+          candidates: [
+            {tok: "15",  p: 0.42, isChosen: true},
+            {tok: "29",  p: 0.18},
+            {tok: "22",  p: 0.10},
+            {tok: "5",   p: 0.06},
+            {tok: "11",  p: 0.04},
+          ]},
+        // r2 (correct, A=+) — boost "5" as the final answer
+        { context: "If 3x + 7 = 22, what is x?\n3x = 22 - 7 = 15, so x = 15/3 = ",
+          candidates: [
+            {tok: "5",    p: 0.71, isChosen: true},
+            {tok: "5.0",  p: 0.12},
+            {tok: "3",    p: 0.05},
+            {tok: "15",   p: 0.04},
+            {tok: "1",    p: 0.02},
+          ]},
+        // r3 (WRONG, A=−) — suppress "29" (model added 22+7 instead of subtracting)
+        { context: "If 3x + 7 = 22, what is x?\n3x + 7 = 22, so 3x = ",
+          candidates: [
+            {tok: "15",  p: 0.45},
+            {tok: "29",  p: 0.31, isChosen: true},
+            {tok: "22",  p: 0.10},
+            {tok: "8",   p: 0.05},
+            {tok: "11",  p: 0.04},
+          ]},
+        // r4 (correct, A=+) — boost "5"
+        { context: "If 3x + 7 = 22, what is x?\nMove 7 over: 3x = 15. Therefore x = ",
+          candidates: [
+            {tok: "5",    p: 0.78, isChosen: true},
+            {tok: "15/3", p: 0.08},
+            {tok: "5.0",  p: 0.05},
+            {tok: "3",    p: 0.03},
+            {tok: "15",   p: 0.02},
+          ]},
+        // r5 (WRONG, A=−) — suppress "0.33" (model wrote x = 22/3 - 7)
+        { context: "If 3x + 7 = 22, what is x?\nx = 22/3 - 7 = ",
+          candidates: [
+            {tok: "0.33",  p: 0.28, isChosen: true},
+            {tok: "5",     p: 0.20},
+            {tok: "0.34",  p: 0.12},
+            {tok: "1",     p: 0.08},
+            {tok: "-0.33", p: 0.05},
+          ]},
+      ],
+      code: [
+        // r1 (passes, A=+) — boost ".lower"
+        { context: "def is_palindrome(s):\n    t = ''.join(c.",
+          candidates: [
+            {tok: "lower",    p: 0.51, isChosen: true},
+            {tok: "isalnum",  p: 0.20},
+            {tok: "upper",    p: 0.08},
+            {tok: "strip",    p: 0.05},
+            {tok: "casefold", p: 0.04},
+          ]},
+        // r2 (passes, A=+) — boost "while" (two-pointer loop)
+        { context: "    s = ''.join(c.lower() for c in s if c.isalnum())\n    i, j = 0, len(s)-1\n    ",
+          candidates: [
+            {tok: "while",  p: 0.42, isChosen: true},
+            {tok: "for",    p: 0.18},
+            {tok: "if",     p: 0.10},
+            {tok: "return", p: 0.05},
+            {tok: "t",      p: 0.04},
+          ]},
+        // r3 (FAILS, A=−) — suppress jumping straight to "return s" without preprocessing
+        { context: "def is_palindrome(s):\n    ",
+          candidates: [
+            {tok: "return", p: 0.42, isChosen: true},
+            {tok: "t",      p: 0.30},
+            {tok: "s",      p: 0.10},
+            {tok: "if",     p: 0.05},
+            {tok: "while",  p: 0.04},
+          ]},
+        // r4 (passes, A=+) — boost "for" in a comprehension
+        { context: "    cleaned = ''.join(c.lower() ",
+          candidates: [
+            {tok: "for",   p: 0.62, isChosen: true},
+            {tok: "if",    p: 0.10},
+            {tok: "in",    p: 0.08},
+            {tok: "where", p: 0.04},
+            {tok: "with",  p: 0.03},
+          ]},
+        // r5 (FAILS, A=−) — suppress "<" (off-by-one in loop bound)
+        { context: "    for i in range(len(s)):\n        if s[i] != s[len(s)-1-i]: return False\n    return i ",
+          candidates: [
+            {tok: "<",   p: 0.36, isChosen: true},
+            {tok: "==",  p: 0.30},
+            {tok: ">=",  p: 0.10},
+            {tok: ">",   p: 0.06},
+            {tok: "<=",  p: 0.05},
+          ]},
+      ],
+      creative: [
+        // r1 (judge=0.85, A=+) — boost "pail"
+        { context: "Slow drip in the heap / each request a heavier",
+          candidates: [
+            {tok: "pail",   p: 0.31, isChosen: true},
+            {tok: "weight", p: 0.18},
+            {tok: "load",   p: 0.15},
+            {tok: "burden", p: 0.09},
+            {tok: "drag",   p: 0.07},
+          ]},
+        // r2 (judge=0.78, A=+) — boost "midnight"
+        { context: "Logs scroll past",
+          candidates: [
+            {tok: "midnight", p: 0.38, isChosen: true},
+            {tok: "noon",     p: 0.15},
+            {tok: "dawn",     p: 0.12},
+            {tok: "the",      p: 0.10},
+            {tok: "us",       p: 0.06},
+          ]},
+        // r3 (judge=0.30, A=−) — suppress "please" (clichéd, weak haiku diction)
+        { context: "I write some new code / it leaks memory once again / oh no",
+          candidates: [
+            {tok: "please",   p: 0.32, isChosen: true},
+            {tok: "the",      p: 0.18},
+            {tok: "midnight", p: 0.10},
+            {tok: "another",  p: 0.08},
+            {tok: "again",    p: 0.06},
+          ]},
+        // r4 (judge=0.72, A=+) — boost "vine"
+        { context: "RAM grows like a",
+          candidates: [
+            {tok: "vine",   p: 0.41, isChosen: true},
+            {tok: "tree",   p: 0.18},
+            {tok: "weed",   p: 0.10},
+            {tok: "shadow", p: 0.07},
+            {tok: "river",  p: 0.05},
+          ]},
+        // r5 (judge=0.45, A=−) — suppress "up" (flat, non-poetic)
+        { context: "Memory go",
+          candidates: [
+            {tok: "up",      p: 0.42, isChosen: true},
+            {tok: "still",   p: 0.18},
+            {tok: "high",    p: 0.10},
+            {tok: "burning", p: 0.05},
+            {tok: "wild",    p: 0.04},
+          ]},
+      ],
+    },
+    hoverAfter(ci) {
+      // Illustrative update: Δp_chosen ≈ η · A · p · (1 − p); others redistribute.
+      const cands = this.hoverPanelData().candidates;
+      const chosen = cands.find(x => x.isChosen);
+      const A = this.hoverAdv();
+      const eta = 0.04;  // exaggerated for visibility
+      const dpChosen = eta * A * chosen.p * (1 - chosen.p);
+      const c = cands[ci];
+      if (c.isChosen) return Math.max(0.001, Math.min(0.999, c.p + dpChosen));
+      return Math.max(0.001, c.p - c.p * dpChosen / Math.max(0.001, 1 - chosen.p));
+    },
+    hoverDelta(ci) { return this.hoverAfter(ci) - this.hoverPanelData().candidates[ci].p; },
+    hoverBarColor(ci) {
+      const c = this.hoverPanelData().candidates[ci];
+      const d = this.hoverDelta(ci);
+      if (c.isChosen) return d >= 0 ? 'rgba(16,185,129,0.7)' : 'rgba(244,63,94,0.7)';
+      return 'rgba(100,116,139,0.45)';
+    },
+
+    tokenShade(i, tok) {
+      // After step 4: shade tokens uniformly per-rollout, intensity ∝ |advantage|.
+      // (Whitespace tokens get no shading to keep it readable.)
+      if (this.step < 4 || /^\s+$/.test(tok)) return 'transparent';
+      const a = this.groupStats().adv[i];
+      const intensity = Math.min(0.55, Math.abs(a) * 0.35);
+      return a >= 0
+        ? `rgba(16,185,129,${intensity})`
+        : `rgba(244,63,94,${intensity})`;
+    },
+
+    // ===== act 2 fast-forward =====
+    ffSnapshots: [
+      {step: 0, acc: 12, length: 18, correct: false, label: 'base/SFT init — guesses, no real reasoning',
+        completion: "x² + y² = 49 - 24 = 25. Wait that's not the question. Answer: 25."},
+      {step: 200, acc: 18, length: 32, correct: false, label: 'random reasoning starting to appear',
+        completion: "We have a + b = 7 and ab = 12.\nSo a² + b² = (a+b)² = 49.\nAnswer: 49"},
+      {step: 1500, acc: 38, length: 64, correct: true, label: 'discovers identity (a+b)² = a² + 2ab + b²',
+        completion: "a + b = 7, ab = 12.\nUse identity: (a+b)² = a² + 2ab + b²\n49 = a² + b² + 24\na² + b² = 25\nAnswer: 25"},
+      {step: 8000, acc: 61, length: 110, correct: true, label: 'starts to verify its own work',
+        completion: "Given a + b = 7 and ab = 12.\nIdentity: (a+b)² = a² + 2ab + b²\n→ a² + b² = (a+b)² - 2ab = 49 - 24 = 25.\nCheck: a, b are roots of t² - 7t + 12 = 0 → t = 3, 4.\n3² + 4² = 9 + 16 = 25. ✓\nAnswer: 25"},
+      {step: 30000, acc: 78, length: 175, correct: true, label: 'long, branching reasoning with self-correction',
+        completion: "Let me set up the problem. We have two unknowns a, b with a+b = 7 and ab = 12.\nI want a² + b². The cleanest path is the algebraic identity:\n  (a + b)² = a² + 2ab + b²\nSo a² + b² = (a+b)² − 2ab = 49 − 24 = 25.\nLet me sanity-check by actually solving for a, b. They are roots of\n  t² − 7t + 12 = 0  ⇒  (t−3)(t−4) = 0  ⇒  {a,b} = {3,4}.\nThen 3² + 4² = 9 + 16 = 25. ✓\nAlso double-check: a+b = 3+4 = 7 ✓, ab = 12 ✓.\nFinal answer: 25."},
+    ],
+    currentSnapshot() { return this.ffSnapshots[this.ffStep]; },
+    ffPlay() {
+      if (this.ffPlaying) {
+        clearInterval(this._ffTimer);
+        this.ffPlaying = false;
+        return;
+      }
+      this.ffPlaying = true;
+      if (this.ffStep >= this.ffSnapshots.length - 1) this.ffStep = 0;
+      this._ffTimer = setInterval(() => {
+        if (this.ffStep < this.ffSnapshots.length - 1) {
+          this.ffStep++;
+        } else {
+          clearInterval(this._ffTimer);
+          this.ffPlaying = false;
+        }
+      }, 1600);
+    },
+
+    // ===== init =====
+    _mathRefresh() {
+      this.$nextTick(() => {
+        if (window.renderMathInElement) {
+          renderMathInElement(document.body, {delimiters:[
+            {left:'$$',right:'$$',display:true},
+            {left:'$',right:'$',display:false},
+          ]});
+        }
+      });
+    },
+    init() {
+      this.$watch('showMath', () => this._mathRefresh());
+      this.$watch('act',      () => this._mathRefresh());
+      this.$watch('algo',     () => this._mathRefresh());
+    },
+  };
+}
+</script>
+</body>
+</html>
