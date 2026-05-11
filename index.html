@@ -169,7 +169,7 @@
                           x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></span>
                   </div>
                 </div>
-                <div :class="sample === 'code' ? 'text-slate-200 mono text-[10.5px] leading-snug whitespace-pre-wrap' : 'text-slate-200 leading-snug'">
+                <div :class="(sample === 'code' || sample === 'tool') ? 'text-slate-200 mono text-[10.5px] leading-snug whitespace-pre-wrap' : 'text-slate-200 leading-snug'">
                   <template x-if="step < 4">
                     <span x-text="r.text"></span>
                   </template>
@@ -288,8 +288,35 @@
               </div>
             </template>
 
+            <!-- Tool use: show the tool registry + 5-point rubric -->
+            <template x-if="sample === 'tool' && currentSample().toolRegistry">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🔧 Tool sandbox · rubric</div>
+                  <span class="text-slate-400">each rollout is parsed, dispatched, and scored against this 5-point rubric:</span>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug space-y-1">
+                  <div class="text-slate-500 text-[10px] uppercase tracking-wider">tool registry (declared in the system prompt)</div>
+                  <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
+                    <div class="text-slate-300 pl-2" x-text="t"></div>
+                  </template>
+                  <div class="text-slate-500 text-[10px] uppercase tracking-wider mt-2">rubric — each criterion contributes 0.2 to reward</div>
+                  <template x-for="(c, ci) in currentSample().rubric" :key="ci">
+                    <div class="text-slate-300 pl-2">
+                      <span class="text-slate-500" x-text="(ci+1) + '.'"></span>
+                      <span x-text="c"></span>
+                    </div>
+                  </template>
+                </div>
+                <div class="text-slate-400 text-[11px]">
+                  reward = (# rubric points satisfied) / 5 — each rollout's per-criterion row is shown above ↑ on its card.
+                  Note: the format/schema checks gate everything downstream — a malformed call can't execute, and a tool that didn't run can't have its result used.
+                </div>
+              </div>
+            </template>
+
             <!-- Math / Creative: keep the original verdict-tile layout -->
-            <template x-if="sample !== 'code' || !currentSample().unitTests">
+            <template x-if="sample !== 'code' && sample !== 'tool'">
               <div class="space-y-2">
                 <div class="flex items-center gap-3 flex-wrap">
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono" x-text="rewardSourceLabel()"></div>
@@ -603,10 +630,6 @@
     </div>
   </section>
 
-  <footer class="text-xs text-slate-500 mt-8 flex items-center justify-between">
-    <div>Built for non-technical audiences with the math one toggle away. All numbers and completions are illustrative.</div>
-    <div class="mono">RLVR · GRPO · PPO · DPO</div>
-  </footer>
 </div>
 
 <script>
@@ -699,6 +722,41 @@ function rlvrSlide() {
           {text: "Memory go up / process dies in the morning / cron restart, repeat", answer: "judge: 0.45", reward: 0.45},
         ],
       },
+      {
+        id: 'tool', label: 'Tool use',
+        prompt: "What's the weather in Paris in Celsius right now?",
+        gt: "calls get_weather(location='Paris', units='celsius'), then uses the returned temp",
+        toolRegistry: [
+          'get_weather(location: str, units: "celsius"|"fahrenheit") → {temp: float, conditions: str}',
+          'get_time(timezone: str) → {time: str, date: str}',
+        ],
+        rubric: [
+          'parses as a valid <tool_call> JSON block',
+          'tool name exists in the registry',
+          'arguments match the tool\'s schema',
+          'tool executes without error',
+          'final answer actually uses the returned value',
+        ],
+        chosen: '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nIt\'s 18°C and partly cloudy in Paris.',
+        rejected: 'Paris is usually around 15°C this time of year, probably mild today.',
+        rollouts: [
+          // r1: perfect — well-formed call, executes, answer uses the result
+          { text: '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nIt\'s 18°C and partly cloudy in Paris.',
+            tests: [true, true, true, true, true], reward: 1.0, answer: "5/5 ✓" },
+          // r2: format/exec OK, but answer IGNORES tool result and falls back to prior — classic shaped-reward leak
+          { text: '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nParis is usually around 15°C this time of year.',
+            tests: [true, true, true, true, false], reward: 0.8, answer: "4/5" },
+          // r3: parses but wrong tool name → registry miss → cascading failures
+          { text: '<tool_call>\n{"name": "weather_api", "arguments": {"city": "Paris"}}\n</tool_call>\n[error: tool \'weather_api\' not found in registry]\nParis should be around 18°C right now.',
+            tests: [true, false, false, false, false], reward: 0.2, answer: "1/5" },
+          // r4: perfect, slight phrasing variation (preamble before the call)
+          { text: 'Let me check that.\n<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nThe current weather in Paris is 18°C with partly cloudy skies.',
+            tests: [true, true, true, true, true], reward: 1.0, answer: "5/5 ✓" },
+          // r5: no tool call at all — pure hallucination from priors
+          { text: 'The weather in Paris this time of year is typically around 15°C with occasional rain.',
+            tests: [false, false, false, false, false], reward: 0.0, answer: "0/5 ✗" },
+        ],
+      },
     ],
 
     // ===== sample/reward coupling =====
@@ -719,7 +777,11 @@ function rlvrSlide() {
     currentAlgo()   { return this.algos.find(a => a.id === this.algo); },
 
     rewardSourceLabel() {
-      if (this.reward === 'verifier') return this.sample === 'code' ? 'unit tests' : 'exact-answer match';
+      if (this.reward === 'verifier') {
+        if (this.sample === 'code') return 'unit tests';
+        if (this.sample === 'tool') return 'tool sandbox + rubric';
+        return 'exact-answer match';
+      }
       if (this.reward === 'judge')    return 'LLM judge + rubric';
       return 'reward model π_RM (Bradley–Terry)';
     },
@@ -728,6 +790,8 @@ function rlvrSlide() {
         return "Parse the rollout's final \\boxed{…}, compare to ground truth. Cheap, deterministic, hard to game.";
       if (this.reward === 'verifier' && this.sample === 'code')
         return "Run each rollout against a hidden test suite. Score = fraction of tests passed.";
+      if (this.reward === 'verifier' && this.sample === 'tool')
+        return "Parse the <tool_call> block, look up the tool, validate args, execute it, then check whether the answer used the result. Each step contributes 0.2 — a shaped, additive reward.";
       if (this.reward === 'judge')
         return "A frozen LLM scores each rollout against an explicit rubric (e.g. syllable count, theme, imagery). Cheap but gameable.";
       return "A reward model trained from human pairwise preferences predicts a scalar 'humans would prefer this' score.";
@@ -984,6 +1048,56 @@ function rlvrSlide() {
             {tok: "high",    p: 0.10},
             {tok: "burning", p: 0.05},
             {tok: "wild",    p: 0.04},
+          ]},
+      ],
+      tool: [
+        // r1 (perfect, A=+) — boost the correct tool name
+        { context: '<tool_call>\n{"name": "',
+          candidates: [
+            {tok: "get_weather",   p: 0.45, isChosen: true},
+            {tok: "get_time",      p: 0.20},
+            {tok: "weather",       p: 0.10},
+            {tok: "search",        p: 0.06},
+            {tok: "fetch_weather", p: 0.04},
+          ]},
+        // r2 (format OK, ignored result, A=+ small) — credit-assignment hazard:
+        // the tool was called correctly so the rollout gets +A, but THIS token
+        // (starting an answer that ignores the tool result) also gets reinforced.
+        { context: '[→ {"temp": 18, "conditions": "partly cloudy"}]\n',
+          candidates: [
+            {tok: "Paris",     p: 0.32, isChosen: true},
+            {tok: "It's",      p: 0.30},
+            {tok: "The",       p: 0.20},
+            {tok: "18°C",      p: 0.08},
+            {tok: "Currently", p: 0.04},
+          ]},
+        // r3 (wrong tool name, A=−) — suppress "weather_api"; "get_weather" rises
+        { context: '<tool_call>\n{"name": "',
+          candidates: [
+            {tok: "get_weather", p: 0.42},
+            {tok: "weather_api", p: 0.28, isChosen: true},
+            {tok: "get_time",    p: 0.10},
+            {tok: "weather",     p: 0.08},
+            {tok: "query",       p: 0.04},
+          ]},
+        // r4 (perfect, A=+) — boost "celsius" as the units value
+        { context: '"location": "Paris", "units": "',
+          candidates: [
+            {tok: "celsius",    p: 0.55, isChosen: true},
+            {tok: "C",          p: 0.18},
+            {tok: "fahrenheit", p: 0.10},
+            {tok: "metric",     p: 0.06},
+            {tok: "F",          p: 0.04},
+          ]},
+        // r5 (no tool call, A=− big) — suppress "The" (jumping straight into prose);
+        // "<tool_call>" indirectly rises — the model learns to invoke the tool first.
+        { context: "What's the weather in Paris in Celsius right now?\n",
+          candidates: [
+            {tok: "<tool_call>", p: 0.40},
+            {tok: "The",         p: 0.30, isChosen: true},
+            {tok: "I'll",        p: 0.10},
+            {tok: "Let",         p: 0.06},
+            {tok: "In",          p: 0.04},
           ]},
       ],
     },
