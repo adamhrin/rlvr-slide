@@ -35,7 +35,9 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
 
-<div x-data="rlvrSlide()" x-init="init()" class="max-w-7xl mx-auto px-5 py-3">
+<div x-data="rlvrSlide()" x-init="init()" class="max-w-7xl mx-auto px-5 py-3"
+     @keydown.window.arrow-right="next($event)"
+     @keydown.window.arrow-left="prev($event)">
 
   <!-- ====== Header ====== -->
   <header class="flex items-center justify-between mb-3">
@@ -57,23 +59,108 @@
     </div>
   </header>
 
-  <!-- ====== Act tabs ====== -->
+  <!-- ====== Slide tabs ====== -->
   <nav class="flex gap-2 mb-3 text-sm">
-    <template x-for="(t,i) in acts" :key="i">
+    <template x-for="(t,i) in slides" :key="i">
       <button
-        @click="act = i+1"
-        :class="act === i+1 ? 'bg-violet-500/20 border-violet-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
+        @click="slide = i+1; if (i+1 === 1) spotIdx = 0; if (i+1 === 2) step = 1;"
+        :class="slide === i+1 ? 'bg-violet-500/20 border-violet-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
         class="px-3 py-1.5 rounded-lg border transition">
-        <span class="text-xs text-slate-500 mr-1.5" x-text="'Act ' + (i+1)"></span>
+        <span class="text-xs text-slate-500 mr-1.5" x-text="'Slide ' + (i+1)"></span>
         <span x-text="t"></span>
       </button>
     </template>
   </nav>
 
+  <!-- ====== Global Prev/Next nav bar (drives whole deck) ====== -->
+  <div class="card p-2 flex items-center gap-2 mb-3">
+    <button @click="prev()" :disabled="!canPrev()"
+            class="px-3 py-1.5 rounded border border-slate-700 text-slate-200 text-sm disabled:opacity-30 hover:bg-slate-800">◀ Prev</button>
+    <div class="flex-1 text-center text-sm font-medium text-slate-100" x-text="positionLabel()"></div>
+    <span class="text-[10px] text-slate-600 hidden md:inline">← / → keys</span>
+    <button @click="next()" :disabled="!canNext()"
+            class="px-3 py-1.5 rounded bg-violet-500 text-white text-sm disabled:opacity-30">Next ▶</button>
+  </div>
+
   <!-- =================================================================== -->
-  <!-- ============================  ACT 1  ============================== -->
+  <!-- ============================  SLIDE 1  (warmup)  ================= -->
   <!-- =================================================================== -->
-  <section x-show="act === 1" class="space-y-4" @keydown.window.arrow-right="nextStep()" @keydown.window.arrow-left="prevStep()">
+  <section x-show="slide ===1"
+           class="card border-2 border-violet-400/60 p-6 md:p-10 min-h-[62vh] flex flex-col justify-center transition-colors duration-500">
+
+    <div class="text-center mb-4">
+      <div class="text-xs uppercase tracking-widest text-violet-400 mb-2">setup</div>
+      <h2 class="text-2xl md:text-4xl font-semibold leading-tight">
+        Same prompt. Three training stages. <span class="grad-text">Three different outputs.</span>
+      </h2>
+    </div>
+
+    <!-- Shared prompt -->
+    <div class="bg-slate-800/60 border border-blue-500/40 rounded-lg p-3 md:p-4 mx-auto max-w-3xl mb-5 text-base md:text-lg text-center">
+      <span class="text-[10px] text-blue-300 mr-2 uppercase tracking-widest">prompt</span>
+      <span class="mono">If 3x + 7 = 22, what is x?</span>
+    </div>
+
+    <!-- Three columns -->
+    <div class="grid grid-cols-12 gap-2 md:gap-3 items-stretch">
+
+      <!-- Pretraining -->
+      <div class="col-span-12 md:col-span-4 flex">
+        <div class="flex flex-col rounded-lg border-2 border-blue-400/60 bg-blue-500/5 p-4 w-full">
+          <div class="text-blue-300 text-[11px] uppercase tracking-widest mb-0.5">stage 1</div>
+          <div class="font-semibold text-lg md:text-xl">Pretraining</div>
+          <div class="text-[11px] text-blue-200/70 italic mb-3">predicts the next token; continues the pattern</div>
+          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">If 4x + 9 = 25, what is x?
+If 2x − 5 = 11, what is x?
+If 5x + 3 = 18, what is x?
+If x/2 + 6 = 10, what is x?</div>
+          <div class="text-[11px] text-blue-200/80 italic mt-2 leading-snug">Looks like a textbook exercise list — so it generates more exercises.</div>
+        </div>
+      </div>
+
+      <!-- Arrow + SFT -->
+      <div class="col-span-12 md:col-span-4 flex">
+        <div class="hidden md:flex items-center justify-center text-3xl text-slate-500 px-1 self-center">→</div>
+        <div class="flex flex-col rounded-lg border-2 border-emerald-400/60 bg-emerald-500/5 p-4 w-full">
+          <div class="text-emerald-300 text-[11px] uppercase tracking-widest mb-0.5">stage 2</div>
+          <div class="font-semibold text-lg md:text-xl">Supervised Fine-Tuning <span class="text-emerald-300/60 text-sm font-normal">(SFT)</span></div>
+          <div class="text-[11px] text-emerald-200/70 italic mb-3">answers as an assistant; format, not new knowledge</div>
+          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">Subtract 7 from both sides:
+3x = 15
+Divide by 3:
+x = 5</div>
+          <div class="text-[11px] text-emerald-200/80 italic mt-2 leading-snug">Same weights, taught to <em>respond</em> rather than <em>continue</em>.</div>
+        </div>
+      </div>
+
+      <!-- Arrow + RL -->
+      <div class="col-span-12 md:col-span-4 flex">
+        <div class="hidden md:flex items-center justify-center text-3xl text-slate-500 px-1 self-center">→</div>
+        <div class="flex flex-col rounded-lg border-2 border-violet-400/60 bg-violet-500/5 p-4 w-full">
+          <div class="text-violet-300 text-[11px] uppercase tracking-widest mb-0.5">stage 3</div>
+          <div class="font-semibold text-lg md:text-xl">Reinforcement Learning <span class="text-violet-300/60 text-sm font-normal">(RL)</span></div>
+          <div class="text-[11px] text-violet-200/70 italic mb-3">thinks step-by-step, checks its own work</div>
+          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">Let me solve step by step.
+3x + 7 = 22
+→ subtract 7:  3x = 15
+→ divide by 3: x = 5
+
+Check: 3(5) + 7 = 22 ✓
+Answer: x = 5</div>
+          <div class="text-[11px] text-violet-200/80 italic mt-2 leading-snug">Nobody taught it to "let me check" — RL kept rewarding rollouts that did.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="text-sm md:text-base text-slate-400 italic text-center mt-5">
+      Same underlying weights at each stage. Post-training mostly <em>shapes</em> what's already there — it doesn't add knowledge.
+    </div>
+  </section>
+
+  <!-- =================================================================== -->
+  <!-- ============================  ACT 2  ============================== -->
+  <!-- =================================================================== -->
+  <section x-show="slide ===2" class="space-y-4">
 
     <!-- Top controls -->
     <div class="card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -107,18 +194,13 @@
       </div>
     </div>
 
-    <!-- Step navigator -->
+    <!-- Step indicator (advance via the global ← / → above; restart resets to step 1) -->
     <div class="card p-2 flex items-center gap-2">
-      <button @click="prevStep()" :disabled="step <= 1"
-              class="px-2 py-1 rounded border border-slate-700 text-slate-300 disabled:opacity-30 text-xs">◀</button>
       <div class="flex-1 text-center leading-tight">
         <span class="text-[10px] text-slate-500 mr-1.5">Step <span class="text-violet-300 mono" x-text="step"></span>/<span class="mono" x-text="totalSteps()"></span></span>
         <span class="text-sm font-medium text-slate-200" x-text="stepName(step)"></span>
-        <span class="text-[10px] text-slate-600 ml-2">(← / → keys)</span>
       </div>
-      <button @click="restart()" class="px-2 py-1 rounded border border-slate-700 text-slate-400 text-xs">⟲</button>
-      <button @click="nextStep()" :disabled="step >= totalSteps()"
-              class="px-3 py-1 rounded bg-violet-500 text-white disabled:opacity-30 text-xs">Next ▸</button>
+      <button @click="restart()" class="px-2 py-1 rounded border border-slate-700 text-slate-400 text-xs">⟲ restart</button>
     </div>
 
     <!-- ===== Pipeline (GRPO/PPO branch) ===== -->
@@ -169,22 +251,22 @@
                           x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></span>
                   </div>
                 </div>
-                <div :class="(sample === 'code' || sample === 'tool') ? 'text-slate-200 mono text-[10.5px] leading-snug whitespace-pre-wrap' : 'text-slate-200 leading-snug'">
-                  <template x-if="step < 4">
-                    <span x-text="r.text"></span>
-                  </template>
-                  <template x-if="step >= 4">
-                    <span>
-                      <template x-for="(tok,j) in r.text.split(/(\s+)/)" :key="j">
-                        <span class="rounded px-px transition-colors duration-700"
+                <div :class="(sample === 'code' || sample === 'tool' || sample === 'market') ? 'text-slate-200 mono text-[10.5px] leading-snug break-words' : 'text-slate-200 leading-snug'"
+                  ><template x-if="step < 4"
+                    ><span class="whitespace-pre-wrap" x-text="r.text"></span
+                  ></template
+                  ><template x-if="step >= 4"
+                    ><span class="whitespace-pre-wrap"
+                      ><template x-for="(tok,j) in r.text.split(/(\s+)/)" :key="j"
+                        ><span class="rounded px-px transition-colors duration-700"
                               :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-violet-400/60 hover:ring-offset-0' : ''"
                               :style="`background-color: ${tokenShade(i, tok)}`"
                               @mouseenter="onTokenHover(i, j, tok)"
-                              x-text="tok"></span>
-                      </template>
-                    </span>
-                  </template>
-                </div>
+                              x-text="tok"></span
+                      ></template
+                    ></span
+                  ></template
+                ></div>
                 <div x-show="step >= 3" class="text-[10px] mono text-slate-500 border-t border-slate-700/60 pt-1 mt-0.5">
                   <template x-if="r.tests">
                     <div class="flex items-center gap-2">
@@ -315,8 +397,45 @@
               </div>
             </template>
 
+            <!-- Market sizing: composite verifier synthesizing all prior domains -->
+            <template x-if="sample === 'market' && currentSample().rubric">
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🎯 composite verifier · 5 components × 0.2 each</div>
+                  <span class="text-slate-400">the trustworthy market-sizing agent has to satisfy every check at once:</span>
+                </div>
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug space-y-1">
+                  <div class="text-slate-500 text-[10px] uppercase tracking-wider">toolbox available to the agent</div>
+                  <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
+                    <div class="text-slate-300 pl-2" x-text="t"></div>
+                  </template>
+                  <div class="text-slate-500 text-[10px] uppercase tracking-wider mt-2">rubric — each row borrows a verifier pattern from an earlier sample</div>
+                  <template x-for="(c, ci) in currentSample().rubric" :key="ci">
+                    <div class="text-slate-300 pl-2 flex items-baseline gap-2">
+                      <span class="text-slate-500" x-text="(ci+1) + '.'"></span>
+                      <span class="flex-1" x-text="c.check"></span>
+                      <span class="text-violet-300 text-[10px] whitespace-nowrap" x-text="'↩ ' + c.borrows"></span>
+                    </div>
+                  </template>
+                </div>
+                <details class="bg-slate-900/40 border border-slate-700/60 rounded text-[11px]">
+                  <summary class="px-2 py-1 text-slate-400 hover:text-slate-200 select-none">how this case was generated — the dataset is computed, not curated ▾</summary>
+                  <div class="px-2 pb-2 pt-1 mono text-[10.5px] leading-snug space-y-0.5">
+                    <template x-for="(line, li) in currentSample().generator" :key="li">
+                    <div :class="line.trim().startsWith('#') ? 'text-slate-500' : (line.includes('tam =') ? 'text-emerald-300' : (line.includes('verifier') ? 'text-amber-300' : 'text-slate-300'))"
+                         x-text="line || ' '"></div>
+                  </template>
+                    <div class="text-slate-400 mt-1.5" style="font-family: ui-sans-serif, system-ui, sans-serif;">this case sampled: <span class="mono text-slate-200">49M × 0.04 × 0.40 × 2,500 × 0.55</span> = <span class="mono text-emerald-200" x-text="currentSample().gt"></span></div>
+                  </div>
+                </details>
+                <div class="text-slate-400 text-[11px] leading-relaxed">
+                  Each rollout's check-row above ↑ shows which of the five components it satisfied — reward = (# components) / 5. A rollout that gets the right number from priors but skips the tools fails (3) and (5); one that calls tools cleanly but bugs the arithmetic fails (4). RLVR pushes the model toward the <em>one trajectory that's trustworthy on every axis</em> — and that trajectory looks the way a senior analyst would actually do the work.
+                </div>
+              </div>
+            </template>
+
             <!-- Math / Creative: keep the original verdict-tile layout -->
-            <template x-if="sample !== 'code' && sample !== 'tool'">
+            <template x-if="sample !== 'code' && sample !== 'tool' && sample !== 'market'">
               <div class="space-y-2">
                 <div class="flex items-center gap-3 flex-wrap">
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono" x-text="rewardSourceLabel()"></div>
@@ -447,15 +566,106 @@
         <div class="text-xs uppercase tracking-wider text-slate-500 mb-1">Step 1: a (prompt, chosen, rejected) triple from a fixed dataset</div>
         <div class="bg-slate-800/60 border border-blue-500/40 rounded-lg p-3 text-sm" x-text="currentSample().prompt"></div>
       </div>
-      <div :class="step >= 2 ? 'opacity-100' : 'opacity-25'" class="transition-opacity">
-        <div class="grid grid-cols-2 gap-3">
+      <div :class="step >= 2 ? 'opacity-100' : 'opacity-25'" class="transition-opacity relative">
+        <!-- Per-sample gradient-strength badge — illustrative snapshot, not a knob. -->
+        <div x-show="step >= 3" class="bg-slate-800/40 border border-purple-500/30 rounded-lg p-2.5 text-xs mb-3 flex items-center gap-3 flex-wrap">
+          <div class="flex items-baseline gap-1.5">
+            <span class="text-purple-200 font-medium">gradient strength</span>
+            <span class="mono text-emerald-300 text-base" x-text="'g = ' + dpoG().toFixed(2)"></span>
+          </div>
+          <div class="flex-1 min-w-[140px] relative h-2 bg-slate-800 rounded-full overflow-hidden">
+            <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500/40 to-purple-400 rounded-full transition-all duration-500"
+                 :style="`width: ${dpoG() * 100}%`"></div>
+          </div>
+          <div class="text-[10px] text-slate-500 italic leading-tight">
+            snapshot of π<sub>θ</sub> at step ≈ <span class="mono" x-text="dpoSnapshotStep.toLocaleString()"></span>
+            · switch samples — easier preferences have already saturated to smaller g
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-3" @mouseleave="dpoHoverInfo.visible = false">
           <div class="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-3 text-sm">
-            <div class="text-emerald-300 text-xs mb-1">CHOSEN</div>
-            <div class="whitespace-pre-wrap" x-text="currentSample().chosen"></div>
+            <div class="text-emerald-300 text-xs mb-1 flex items-center gap-2">
+              <span>CHOSEN</span>
+              <span x-show="step >= 3" class="text-[10px] text-emerald-400/80 italic font-normal">↑ probability pushed up</span>
+            </div>
+            <template x-if="step < 3"><div class="whitespace-pre-wrap" x-text="currentSample().chosen"></div></template>
+            <template x-if="step >= 3"><div class="whitespace-pre-wrap leading-relaxed"
+              ><template x-for="(tok,j) in currentSample().chosen.split(/(\s+)/)" :key="'c-'+j"
+                ><span class="rounded px-px transition-colors duration-700"
+                      :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-emerald-400/60' : ''"
+                      :style="`background-color: ${dpoTokenShade('chosen', tok)}`"
+                      @mouseenter="onDpoTokenHover('chosen', j, tok)"
+                      x-text="tok"></span
+              ></template
+            ></div></template>
           </div>
           <div class="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-sm">
-            <div class="text-rose-300 text-xs mb-1">REJECTED</div>
-            <div class="whitespace-pre-wrap" x-text="currentSample().rejected"></div>
+            <div class="text-rose-300 text-xs mb-1 flex items-center gap-2">
+              <span>REJECTED</span>
+              <span x-show="step >= 3" class="text-[10px] text-rose-400/80 italic font-normal">↓ probability pushed down</span>
+            </div>
+            <template x-if="step < 3"><div class="whitespace-pre-wrap" x-text="currentSample().rejected"></div></template>
+            <template x-if="step >= 3"><div class="whitespace-pre-wrap leading-relaxed"
+              ><template x-for="(tok,j) in currentSample().rejected.split(/(\s+)/)" :key="'r-'+j"
+                ><span class="rounded px-px transition-colors duration-700"
+                      :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-rose-400/60' : ''"
+                      :style="`background-color: ${dpoTokenShade('rejected', tok)}`"
+                      @mouseenter="onDpoTokenHover('rejected', j, tok)"
+                      x-text="tok"></span
+              ></template
+            ></div></template>
+          </div>
+        </div>
+
+        <!-- ===== DPO HOVER POPOVER ===== -->
+        <div class="absolute z-50 left-1/2 -translate-x-1/2 pointer-events-none transition-opacity duration-200"
+             :class="dpoHoverInfo.visible && step >= 3 ? 'opacity-100' : 'opacity-0'"
+             style="top: 100%; margin-top: 8px; width: 540px; max-width: calc(100% - 32px);">
+          <div class="bg-slate-900/95 backdrop-blur border rounded-lg p-3 text-xs shadow-2xl space-y-2"
+               :class="dpoHoverInfo.side === 'chosen' ? 'border-emerald-400/50' : 'border-rose-400/50'">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="mono font-medium"
+                      :class="dpoHoverInfo.side === 'chosen' ? 'text-emerald-300' : 'text-rose-300'"
+                      x-text="dpoHoverInfo.side === 'chosen' ? 'chosen response' : 'rejected response'"></span>
+                <span class="text-slate-500">·</span>
+                <span class="text-slate-400">token</span>
+                <span class="mono text-amber-300" x-text="'“' + dpoHoverInfo.token + '”'"></span>
+              </div>
+              <div class="mono text-[11px] px-1.5 py-0.5 rounded"
+                   :class="dpoHoverInfo.side === 'chosen' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
+                   x-text="(dpoHoverInfo.side === 'chosen' ? '∇ pushes ↑' : '∇ pushes ↓') + '   g·β = ' + dpoG().toFixed(2) + '·β'"></div>
+            </div>
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-[10.5px] leading-snug text-slate-300">
+              <span class="text-slate-500 text-[9px] uppercase tracking-wider mr-1.5">context →</span>
+              <span x-text="dpoHoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
+            </div>
+            <div class="space-y-1">
+              <template x-for="(c, ci) in dpoHoverPanelData().candidates" :key="ci">
+                <div class="flex items-center gap-2">
+                  <div class="mono text-[11px] w-20 text-right truncate"
+                       :class="c.isChosen ? 'text-amber-300 font-medium' : 'text-slate-400'">
+                    <span x-show="c.isChosen" class="text-amber-400">★ </span>
+                    <span x-text="'“' + c.tok + '”'"></span>
+                  </div>
+                  <div class="flex-1 relative h-4 bg-slate-800 rounded overflow-hidden">
+                    <div class="absolute inset-y-0 left-0 border-r border-slate-500/50"
+                         :style="`width: ${c.p * 100 * 1.6}%`"></div>
+                    <div class="absolute inset-y-0 left-0 transition-all duration-500 rounded"
+                         :style="`width: ${dpoHoverAfter(ci) * 100 * 1.6}%; background: ${dpoHoverBarColor(ci)}`"></div>
+                  </div>
+                  <div class="mono text-[10px] flex items-center gap-1 w-28 justify-end">
+                    <span class="text-slate-500" x-text="(c.p * 100).toFixed(0) + '%'"></span>
+                    <span class="text-slate-600">→</span>
+                    <span :class="dpoHoverDelta(ci) > 0.0001 ? 'text-emerald-300' : (dpoHoverDelta(ci) < -0.0001 ? 'text-rose-300' : 'text-slate-400')"
+                          x-text="(dpoHoverAfter(ci) * 100).toFixed(0) + '%'"></span>
+                  </div>
+                </div>
+              </template>
+            </div>
+            <div class="text-[10px] text-slate-500 italic leading-snug pt-0.5 border-t border-slate-700/60">
+              Each token's gradient gets multiplied by g·β, with g read off the derivation panel above. Same g for every token in this sequence — DPO has no per-token credit assignment.
+            </div>
           </div>
         </div>
       </div>
@@ -465,23 +675,31 @@
           <div x-show="!showMath" class="text-slate-300">
             The loss raises the log-probability of the chosen answer and lowers the log-probability of the rejected answer — relative to the frozen π<sub>ref</sub>.
             No environment, no rollouts, no separate reward model.
+            <strong class="text-violet-200 block mt-1.5">Hover any token above to see its top-5 prediction shift.</strong>
           </div>
           <div x-show="showMath" class="mt-1">
             $$ \mathcal{L}_{\text{DPO}} = -\log \sigma\!\left( \beta \log \frac{\pi_\theta(y_w)}{\pi_{\text{ref}}(y_w)} - \beta \log \frac{\pi_\theta(y_l)}{\pi_{\text{ref}}(y_l)} \right) $$
           </div>
         </div>
       </div>
-      <div :class="step >= 4 ? 'opacity-100' : 'opacity-25'" class="transition-opacity text-xs text-slate-400 italic">
-        DPO collapses the whole RL loop into a supervised contrastive objective. Cheaper, more stable —
-        but you can't react to the model's own evolving outputs and you need a curated preference dataset.
+      <div :class="step >= 4 ? 'opacity-100' : 'opacity-25'" class="transition-opacity text-xs text-slate-400 italic space-y-1.5">
+        <div>
+          DPO collapses the whole RL loop into a supervised contrastive objective. Cheaper, more stable —
+          but you can't react to the model's own evolving outputs and you need a curated preference dataset.
+        </div>
+        <div class="text-amber-300/90 not-italic">
+          ⚠ A subtle property of DPO: the per-token shading is uniform (no credit assignment),
+          and the gradient magnitude <em class="italic">shrinks</em> as the model already prefers chosen —
+          examples it gets "right" stop contributing to learning.
+        </div>
       </div>
     </div>
   </section>
 
   <!-- =================================================================== -->
-  <!-- ============================  ACT 2  ============================== -->
+  <!-- ============================  ACT 3  ============================== -->
   <!-- =================================================================== -->
-  <section x-show="act === 2" class="grid grid-cols-12 gap-5">
+  <section x-show="slide ===3" class="grid grid-cols-12 gap-5">
 
     <div class="col-span-12 card p-4">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -580,9 +798,9 @@
   </section>
 
   <!-- =================================================================== -->
-  <!-- ============================  ACT 3  ============================== -->
+  <!-- ============================  ACT 4  ============================== -->
   <!-- =================================================================== -->
-  <section x-show="act === 3" class="grid grid-cols-12 gap-5">
+  <section x-show="slide ===4" class="grid grid-cols-12 gap-5">
     <div class="col-span-12">
       <h2 class="text-xl font-semibold mb-1">…and yet, what we don't know</h2>
       <p class="text-sm text-slate-400 max-w-3xl">
@@ -630,25 +848,139 @@
     </div>
   </section>
 
+  <!-- =================================================================== -->
+  <!-- ============================  ACT 5  (synthesis)  ================ -->
+  <!-- =================================================================== -->
+  <section x-show="slide ===5" class="grid grid-cols-12 gap-5">
+
+    <div class="col-span-12">
+      <h2 class="text-xl font-semibold mb-1">The loop is the easy part. The <span class="grad-text">data</span> and the <span class="grad-text">scale</span> are everything.</h2>
+      <p class="text-sm text-slate-400 max-w-3xl">
+        Everything we just walked through fits on one slide. What separates a model that <em>can</em> reason from one that reliably does
+        is tens of thousands of well-crafted problems paired with cheap, robust verifiers — and the compute to run the loop on them
+        hundreds of thousands of times.
+      </p>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-emerald-300 text-xs uppercase tracking-wider mb-1">Scale</div>
+      <div class="font-medium mb-2">Why throwing more compute at it actually helps</div>
+      <div class="text-sm text-slate-300 space-y-2">
+        <p>The loop you saw runs ~10⁵–10⁶ times across thousands of problems. Each step nudges the model only slightly.</p>
+        <p>Behaviors like <em>"wait, let me reconsider"</em> emerge because — eventually — <em>some</em> rollout produced them, got rewarded, and the model learned that strategy worked. More rollouts = more chances to stumble on a useful strategy that can then be reinforced.</p>
+        <p class="text-emerald-200/80 text-xs italic">Verifiable domains scale especially well: the reward signal is a cheap, deterministic function call. You can afford orders of magnitude more rollouts than RLHF, where each scoring step needs a (slow, expensive, gameable) judge model.</p>
+      </div>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">What makes a dataset good</div>
+      <div class="font-medium mb-2">Difficulty calibration beats raw size</div>
+      <div class="text-sm text-slate-300 space-y-2">
+        <p>A problem the model gets right 100% of the time produces no gradient — every rollout already scored 1.0, group mean is 1.0, advantage is 0. A problem it gets right 0% of the time is symmetric: no rollout to learn from.</p>
+        <p>The sweet spot is pass rates roughly <span class="mono text-amber-200">10–70%</span>. Serious shops constantly re-bucket their training pool as the model improves — yesterday's hard problems become today's free-grade examples.</p>
+        <p class="text-amber-200/80 text-xs italic">After difficulty calibration: diverse coverage of the target skill, and verifiers that adversarial rollouts can't game.</p>
+      </div>
+    </div>
+
+    <div class="col-span-12 md:col-span-4 card p-4">
+      <div class="text-cyan-300 text-xs uppercase tracking-wider mb-1">Where the data actually comes from</div>
+      <div class="font-medium mb-2">Several pipelines, almost always combined</div>
+      <ul class="text-sm text-slate-300 space-y-1.5 list-none">
+        <li><span class="text-cyan-200 font-medium">Existing benchmarks</span> — MATH, GSM8K, competitive-programming archives, Lean / Coq proof sets. Cheap floor, but quickly saturated and contaminated.</li>
+        <li><span class="text-cyan-200 font-medium">Domain experts</span> — olympiad winners, top competitive programmers paid to write fresh problems <em>with</em> reference solutions. Expensive and slow. Frontier labs invest heavily here.</li>
+        <li><span class="text-cyan-200 font-medium">Generated environments</span> — randomly-parameterized problem templates (cf. the market-sizing sample) with auto-verifiers; agentic sandboxes with synthetic tool registries. Cheap, unlimited, but easy to make trivial.</li>
+        <li><span class="text-cyan-200 font-medium">Filtered self-play</span> — model proposes problems, a verifier or stronger judge filters the well-posed ones, RL on the rest. Bootstrap effect.</li>
+        <li><span class="text-cyan-200 font-medium">Process supervision</span> — humans grade <em>intermediate</em> reasoning steps, not just the final answer. Helps with the per-token credit-assignment problem from Act 2.</li>
+      </ul>
+    </div>
+
+    <div class="col-span-12 card p-4 text-sm text-slate-300">
+      <div class="font-medium text-violet-200 mb-1">The bottleneck has moved</div>
+      Five years ago the bottleneck for capability was compute and parameter count. Today, for RL'd reasoning, it's increasingly
+      <em>clean (problem, verifier) pairs at scale</em>. The labs racing ahead aren't the ones with the cleverest losses —
+      DPO, GRPO, PPO are all in the open. They're the ones investing the most in dataset construction:
+      paying experts, building generative environments, running large-scale filtering pipelines.
+      The math fits on one slide; the data takes a quarter of a company.
+    </div>
+  </section>
+
 </div>
 
 <script>
 function rlvrSlide() {
   return {
     // ===== state =====
-    act: 1,
+    slide: 1,
+    // slide-1 sub-panel: 0..spotCount-1
+    spotIdx: 0,
+    spotCount: 1,
     showMath: false,
     sample: 'math',
     algo: 'grpo',
     reward: 'verifier',
     step: 1,            // 1..4 click-driven reveal for Act 1
     hoverInfo: {visible: false, rolloutIdx: 0, tokenIdx: 0, token: ''},
+    dpoHoverInfo: {visible: false, side: null, tokenIdx: 0, token: ''},
+    // Snapshot of π_θ's training state on each triple: implicit rewards m_w, m_l (per sample).
+    // The margin and the gradient strength g are *computed*, not chosen.
+    // A live training step would derive these from a forward pass over y_w and y_l.
+    dpoSnapshotStep: 5000,
+    dpoMargin() {
+      const s = this.currentSample();
+      return (s.dpoMw ?? 0) - (s.dpoMl ?? 0);
+    },
+    dpoG() { return 1 / (1 + Math.exp(this.dpoMargin())); },
     ffStep: 0,
     ffPlaying: false,
     _ffTimer: null,
 
-    acts: ['One sample, one step', 'Now do it 100,000 times', "What we don't know"],
+    slides: ['Where this fits', 'One sample, one step', 'Now do it 100,000 times', "What we don't know", 'The data and the scale'],
 
+    // ===== slide 1 spotlight =====
+    spotTitles: ['Three training stages, one prompt'],
+    spotBorders: ['border-violet-400/60'],
+
+    // ===== global deck navigation (drives arrow keys + Prev/Next bar) =====
+    next($event) {
+      if ($event && $event.target && ['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName)) return;
+      if (this.slide === 1) {
+        if (this.spotIdx < this.spotCount - 1) this.spotIdx++;
+        else { this.slide = 2; this.step = 1; this._mathRefresh(); }
+      } else if (this.slide === 2) {
+        if (this.step < this.totalSteps()) { this.step++; this._mathRefresh(); }
+        else { this.slide = 3; }
+      } else if (this.slide < this.slides.length) {
+        this.slide++;
+      }
+    },
+    prev($event) {
+      if ($event && $event.target && ['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName)) return;
+      if (this.slide === 1) {
+        if (this.spotIdx > 0) this.spotIdx--;
+      } else if (this.slide === 2) {
+        if (this.step > 1) { this.step--; this._mathRefresh(); }
+        else { this.slide = 1; this.spotIdx = this.spotCount - 1; }
+      } else if (this.slide > 2) {
+        this.slide--;
+        if (this.slide === 2) { this.step = this.totalSteps(); this._mathRefresh(); }
+      }
+    },
+    canNext() {
+      if (this.slide < this.slides.length) return true;
+      if (this.slide === 2 && this.step < this.totalSteps()) return true;
+      if (this.slide === 1 && this.spotIdx < this.spotCount - 1) return true;
+      return false;
+    },
+    canPrev() {
+      if (this.slide > 1) return true;
+      if (this.slide === 1 && this.spotIdx > 0) return true;
+      return false;
+    },
+    positionLabel() {
+      if (this.slide === 1) return `Slide 1 · ${this.spotTitles[this.spotIdx]}`;
+      if (this.slide === 2) return `Slide 2 · Step ${this.step}/${this.totalSteps()} · ${this.stepName(this.step)}`;
+      return `Slide ${this.slide} · ${this.slides[this.slide-1]}`;
+    },
     algos: [
       {id:'grpo', label:'GRPO', name:'Group Relative Policy Optimization',
        pitch: 'DeepSeek\'s simplification of PPO: drop the critic network and use the group of rollouts as the baseline.',
@@ -674,6 +1006,8 @@ function rlvrSlide() {
         gt: "5",
         chosen: "Subtract 7 from both sides: 3x = 15. Divide by 3: x = 5.",
         rejected: "x = 22/3 - 7 ≈ 0.33 (forgot to subtract 7 first).",
+        // DPO snapshot of π_θ on this triple at step ≈ 5k. Easy preference → margin large → g small.
+        dpoMw: +1.20, dpoMl: -0.30,
         rollouts: [
           {text: "Subtract 7: 3x = 15. Divide by 3, so x = 5.", answer: "5", reward: 1.0},
           {text: "3x = 22 - 7 = 15, so x = 15/3 = 5.", answer: "5", reward: 1.0},
@@ -688,6 +1022,8 @@ function rlvrSlide() {
         gt: "passes all 5 unit tests",
         chosen: "def is_palindrome(s):\n    t = ''.join(c.lower() for c in s if c.isalnum())\n    return t == t[::-1]",
         rejected: "def is_palindrome(s):\n    return s == s[::-1]   # ignores case + punctuation",
+        // Code: clear right-answer → model has learned it well by step 5k.
+        dpoMw: +0.85, dpoMl: -0.20,
         unitTests: [
           'assert is_palindrome("aba")',
           'assert is_palindrome("A man a plan a canal Panama")',
@@ -714,6 +1050,8 @@ function rlvrSlide() {
         gt: "judge rubric: meter, theme, imagery",
         chosen: "Slow drip in the heap / each request a heavier pail / midnight, and OOM",
         rejected: "I am debugging / there is a memory leak in / my web application",
+        // Creative: subjective preference, model barely budges → margin tiny → g near 0.5 (big gradient still).
+        dpoMw: +0.08, dpoMl: -0.07,
         rollouts: [
           {text: "Slow drip in the heap / each request a heavier pail / midnight, and OOM", answer: "judge: 0.85", reward: 0.85},
           {text: "Logs scroll past midnight / one allocation forgotten / sunrise still leaking", answer: "judge: 0.78", reward: 0.78},
@@ -739,6 +1077,8 @@ function rlvrSlide() {
         ],
         chosen: '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nIt\'s 18°C and partly cloudy in Paris.',
         rejected: 'Paris is usually around 15°C this time of year, probably mild today.',
+        // Tool use: structural preference (must emit <tool_call>) — moderately learned by step 5k.
+        dpoMw: +0.45, dpoMl: -0.10,
         rollouts: [
           // r1: perfect — well-formed call, executes, answer uses the result
           { text: '<tool_call>\n{"name": "get_weather", "arguments": {"location": "Paris", "units": "celsius"}}\n</tool_call>\n[→ {"temp": 18, "conditions": "partly cloudy"}]\nIt\'s 18°C and partly cloudy in Paris.',
@@ -757,6 +1097,57 @@ function rlvrSlide() {
             tests: [false, false, false, false, false], reward: 0.0, answer: "0/5 ✗" },
         ],
       },
+      {
+        id: 'market', label: 'Market sizing',
+        prompt: "Estimate the annual TAM (€) for public EV charging in Germany. " +
+                "Show your decomposition, fetch the anchors you need, and cite sources.",
+        gt: "€1.08B  (±5%)",
+        toolRegistry: [
+          'get_stat(region: str, metric: str) → {value: float, source: str, year: int}',
+          'python(expr: str) → {result: float}',
+        ],
+        rubric: [
+          {check: 'Decomposition is a parseable plan with named factors',  borrows: 'Tool use · format'},
+          {check: 'Each anchor fetched via get_stat() with valid args',    borrows: 'Tool use · registry'},
+          {check: 'Computation emitted as python() and executes cleanly',  borrows: 'Code · sandbox'},
+          {check: 'Final number within ±5% of ground-truth TAM',           borrows: 'Math · tolerance'},
+          {check: 'Final answer cites the source returned for each anchor',borrows: 'Tool use · grounding'},
+        ],
+        generator: [
+          'region    ~ {DE, FR, UK, US, ...}     # vehicle stock from public stats',
+          'product   ~ {EV charging, e-bikes, ...}',
+          'ev_share  ~ Uniform(0.01, 0.20)        # share of cars that are EV',
+          'public_%  ~ Uniform(0.20, 0.60)        # share relying on public charging',
+          'kWh_yr    ~ Uniform(1500, 4000)        # energy per EV per year',
+          'price     ~ LogNormal(μ, σ)            # € per kWh at public chargers',
+          '',
+          'tam = vehicles[region] * ev_share * public_% * kWh_yr * price',
+          '',
+          'verifier(answer) = |extract_number(answer) - tam| / tam < 0.05',
+        ],
+        chosen:   "plan: vehicles · ev_share · public · kWh · price\nget_stat(DE) → 49M , .04 , .40 , 2500 , €.55\npython( 49e6 * .04 * .40 * 2500 * .55 )\n  → 1.08e9\nTAM ≈ €1.08B  (KBA, BNetzA, ICCT)",
+        rejected: "The TAM is roughly €2-3 billion, given growing EV adoption and the expanding public charging network.",
+        // Market sizing: long multi-step trajectory, many degrees of freedom → margin small → g still substantial.
+        dpoMw: +0.18, dpoMl: -0.06,
+        rollouts: [
+          // r1: perfect — plan + get_stat + python + sourced answer
+          { text: "plan: vehicles · ev_share · public · kWh · price\nget_stat(DE) → 49M , .04 , .40 , 2500 , €.55\npython( 49e6 * .04 * .40 * 2500 * .55 )\n  → 1.08e9\nTAM ≈ €1.08B  (KBA, BNetzA)",
+            tests: [true, true, true, true, true], reward: 1.0, answer: "€1.08B" },
+          // r2: decomp + tools + code all clean, but python has '/' instead of '*'.
+          // Still scores 0.8 — the WRONG operator gets a positive nudge. (Credit-assignment hazard.)
+          { text: "plan: vehicles · ev_share · public · kWh · price\nget_stat(DE) → 49M , .04 , .40 , 2500 , €.55\npython( 49e6 * .04 / .40 * 2500 * .55 )\n  → 6.74e9\nTAM ≈ €6.7B  (KBA, BNetzA)",
+            tests: [true, true, true, false, true], reward: 0.8, answer: "€6.7B" },
+          // r3: plan present but skipped tools, guessed anchors from priors, inline arithmetic
+          { text: "plan: vehicles · ev_share · public · kWh · price\n50M cars, ~5% EV, ~40% public,\n  ~2500 kWh, ~€.50/kWh\n50e6 * .05 * .40 * 2500 * .50\n  ≈ €1.25B",
+            tests: [true, false, false, false, false], reward: 0.2, answer: "€1.25B" },
+          // r4: full pipeline, right number, but final answer drops the source citations
+          { text: "plan: vehicles · ev_share · public · kWh · price\nget_stat(DE) → 49M , .04 , .40 , 2500 , €.55\npython( 49e6 * .04 * .40 * 2500 * .55 )\n  → 1.08e9\nTAM ≈ €1.08B.",
+            tests: [true, true, true, true, false], reward: 0.8, answer: "€1.08B" },
+          // r5: pure prose hallucination — no plan, no tools, no code, no source
+          { text: "The TAM is roughly €2-3 billion,\ngiven growing EV adoption and the\nexpanding public charging network.",
+            tests: [false, false, false, false, false], reward: 0.0, answer: "≈€2.5B" },
+        ],
+      },
     ],
 
     // ===== sample/reward coupling =====
@@ -772,14 +1163,15 @@ function rlvrSlide() {
       this.restart();
     },
 
-    // ===== act 1 helpers =====
+    // ===== slide 2 helpers =====
     currentSample() { return this.samples.find(s => s.id === this.sample); },
     currentAlgo()   { return this.algos.find(a => a.id === this.algo); },
 
     rewardSourceLabel() {
       if (this.reward === 'verifier') {
-        if (this.sample === 'code') return 'unit tests';
-        if (this.sample === 'tool') return 'tool sandbox + rubric';
+        if (this.sample === 'code')   return 'unit tests';
+        if (this.sample === 'tool')   return 'tool sandbox + rubric';
+        if (this.sample === 'market') return 'composite · 5 components × 0.2';
         return 'exact-answer match';
       }
       if (this.reward === 'judge')    return 'LLM judge + rubric';
@@ -792,6 +1184,8 @@ function rlvrSlide() {
         return "Run each rollout against a hidden test suite. Score = fraction of tests passed.";
       if (this.reward === 'verifier' && this.sample === 'tool')
         return "Parse the <tool_call> block, look up the tool, validate args, execute it, then check whether the answer used the result. Each step contributes 0.2 — a shaped, additive reward.";
+      if (this.reward === 'verifier' && this.sample === 'market')
+        return "Five verifier patterns from the earlier samples, composed. The agent has to plan a decomposition, fetch anchors via tools, compute with code, hit the right number, and cite sources — all in one trajectory.";
       if (this.reward === 'judge')
         return "A frozen LLM scores each rollout against an explicit rubric (e.g. syllable count, theme, imagery). Cheap but gameable.";
       return "A reward model trained from human pairwise preferences predicts a scalar 'humans would prefer this' score.";
@@ -816,7 +1210,7 @@ function rlvrSlide() {
       return 'A learned signal from a reward model trained on human preferences. The original RLHF setup.';
     },
 
-    // ===== act 1 step navigation =====
+    // ===== slide 2 step navigation =====
     totalSteps() { return 4; },
     stepNames: {
       grpo: ['Sample a prompt', 'Generate G rollouts', 'Score with verifier', 'Group advantage + per-token nudges'],
@@ -826,7 +1220,7 @@ function rlvrSlide() {
     stepName(n) { return (this.stepNames[this.algo] || this.stepNames.grpo)[n - 1] || ''; },
     nextStep() { if (this.step < this.totalSteps()) this.step++; this._mathRefresh(); },
     prevStep() { if (this.step > 1) this.step--; this._mathRefresh(); },
-    restart()  { this.step = 1; this.hoverInfo.visible = false; this._mathRefresh(); },
+    restart()  { this.step = 1; this.hoverInfo.visible = false; this.dpoHoverInfo.visible = false; this._mathRefresh(); },
 
     // ===== token hover (replaces old step-5 zoom panel) =====
     onTokenHover(rolloutIdx, tokenIdx, tok) {
@@ -1100,6 +1494,58 @@ function rlvrSlide() {
             {tok: "In",          p: 0.04},
           ]},
       ],
+      market: [
+        // r1 (PERFECT, A=+) — boost the executed TAM number returned by python()
+        { context: "<python>49e6*0.04*0.40*2500*0.55</python> → ",
+          candidates: [
+            {tok: "1.078e9", p: 0.42, isChosen: true},
+            {tok: "1.08e9",  p: 0.20},
+            {tok: "2.7e9",   p: 0.08},
+            {tok: "5.4e8",   p: 0.06},
+            {tok: "1.0e9",   p: 0.04},
+          ]},
+        // r2 (CREDIT-ASSIGNMENT HAZARD, A=+ small) — the buggy "/" gets reinforced
+        // because the overall rollout still scored 0.8 (decomp + tools + code + sources all ✓).
+        // "*" was MUCH more likely under the prior, but the wrong "/" is the one that gets nudged up.
+        // This is the existing "Per-token caveat" details box made concrete.
+        { context: "<python>49e6*0.04",
+          candidates: [
+            {tok: "/",  p: 0.28, isChosen: true},
+            {tok: "*",  p: 0.55},
+            {tok: "+",  p: 0.04},
+            {tok: ")",  p: 0.03},
+            {tok: "-",  p: 0.02},
+          ]},
+        // r3 (WRONG, A=−) — suppress jumping to prose anchors instead of calling get_stat.
+        // "get_stat(DE)" was already more likely under the prior; the negative signal lifts it further.
+        { context: "plan: vehicles · ev_share · public · kWh · price\n",
+          candidates: [
+            {tok: "50M",          p: 0.30, isChosen: true},
+            {tok: "get_stat(DE)", p: 0.42},
+            {tok: "python(",      p: 0.10},
+            {tok: "<get_stat>",   p: 0.06},
+            {tok: "First",        p: 0.04},
+          ]},
+        // r4 (CREDIT-ASSIGNMENT HAZARD, A=+) — the unsourced "." is reinforced;
+        // " (sources" was a plausible alternative that loses ground despite being the "right" choice.
+        { context: "TAM ≈ €1.08B",
+          candidates: [
+            {tok: ".",         p: 0.38, isChosen: true},
+            {tok: " (sources", p: 0.22},
+            {tok: " (KBA",     p: 0.10},
+            {tok: " — KBA",    p: 0.06},
+            {tok: " from",     p: 0.04},
+          ]},
+        // r5 (WRONG, A=− big) — suppress jumping straight into prose; "plan:" / "<get_stat>" rise
+        { context: "Estimate the annual TAM for public EV charging in Germany.\n",
+          candidates: [
+            {tok: "The",        p: 0.32, isChosen: true},
+            {tok: "plan:",      p: 0.40},
+            {tok: "<get_stat>", p: 0.10},
+            {tok: "I'll",       p: 0.08},
+            {tok: "First",      p: 0.04},
+          ]},
+      ],
     },
     hoverAfter(ci) {
       // Illustrative update: Δp_chosen ≈ η · A · p · (1 − p); others redistribute.
@@ -1120,6 +1566,82 @@ function rlvrSlide() {
       return 'rgba(100,116,139,0.45)';
     },
 
+    // ===== DPO token hover (chosen/rejected, no rollouts) =====
+    onDpoTokenHover(side, tokenIdx, tok) {
+      if (this.step < 3) return;
+      const trimmed = (tok || '').trim();
+      if (!trimmed) return;
+      this.dpoHoverInfo = {visible: true, side, tokenIdx, token: trimmed};
+    },
+    dpoHoverContext() {
+      const text = (this.dpoHoverInfo.side === 'chosen')
+        ? this.currentSample().chosen
+        : this.currentSample().rejected;
+      if (!text) return '';
+      const parts = text.split(/(\s+)/);
+      const before = parts.slice(0, this.dpoHoverInfo.tokenIdx).join('');
+      const prompt = this.currentSample().prompt.replace(/\s+/g, ' ').trim();
+      let full = prompt + ' ⟫ ' + before;
+      const maxLen = 130;
+      if (full.length > maxLen) full = '…' + full.slice(-maxLen);
+      return full;
+    },
+    dpoHoverSign() { return this.dpoHoverInfo.side === 'chosen' ? +1 : -1; },
+    // Synthesize a plausible top-5: alternatives drawn from the contrastive partner's tokens
+    // so they're thematically tight. Hash-based p_chosen → each token shows a distinct shift.
+    dpoHoverPanelData() {
+      const tok = this.dpoHoverInfo.token;
+      if (!tok) return {candidates: []};
+      const s = this.currentSample();
+      const otherText = (this.dpoHoverInfo.side === 'chosen') ? s.rejected : s.chosen;
+      const pool = [];
+      const seen = new Set([tok]);
+      for (const w of (otherText || '').split(/\s+/)) {
+        const t = (w || '').trim();
+        if (t && !seen.has(t)) { pool.push(t); seen.add(t); }
+        if (pool.length >= 4) break;
+      }
+      while (pool.length < 4) pool.push('(other)');
+      const alts = pool.slice(0, 4);
+      let h = 2166136261;
+      for (let i = 0; i < tok.length; i++) { h ^= tok.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+      const chosenP = 0.22 + ((h % 25) / 100);
+      const remaining = (1 - chosenP) * 0.62;
+      const weights = [4, 3, 2, 1];
+      const wSum = weights.reduce((a, b) => a + b, 0);
+      return {
+        candidates: [
+          {tok, p: chosenP, isChosen: true},
+          ...alts.map((a, i) => ({tok: a, p: (weights[i] / wSum) * remaining + 0.015})),
+        ],
+      };
+    },
+    dpoHoverAfter(ci) {
+      const cands = this.dpoHoverPanelData().candidates;
+      const chosen = cands.find(x => x.isChosen);
+      if (!chosen) return 0;
+      const eta = 0.6;  // exaggerated for visibility (analogous to grpo hoverAfter)
+      const dpChosen = eta * this.dpoHoverSign() * this.dpoG() * chosen.p * (1 - chosen.p);
+      const c = cands[ci];
+      if (c.isChosen) return Math.max(0.001, Math.min(0.999, c.p + dpChosen));
+      return Math.max(0.001, c.p - c.p * dpChosen / Math.max(0.001, 1 - chosen.p));
+    },
+    dpoHoverDelta(ci) { return this.dpoHoverAfter(ci) - this.dpoHoverPanelData().candidates[ci].p; },
+    dpoHoverBarColor(ci) {
+      const c = this.dpoHoverPanelData().candidates[ci];
+      const d = this.dpoHoverDelta(ci);
+      if (c.isChosen) return d >= 0 ? 'rgba(16,185,129,0.7)' : 'rgba(244,63,94,0.7)';
+      return 'rgba(100,116,139,0.45)';
+    },
+    dpoTokenShade(side, tok) {
+      // Uniform per side — DPO has no per-token credit assignment. Intensity scales with g.
+      if (this.step < 3 || /^\s+$/.test(tok)) return 'transparent';
+      const intensity = 0.16 + this.dpoG() * 0.22;  // ~0.16-0.38
+      return side === 'chosen'
+        ? `rgba(16,185,129,${intensity})`
+        : `rgba(244,63,94,${intensity})`;
+    },
+
     tokenShade(i, tok) {
       // After step 4: shade tokens uniformly per-rollout, intensity ∝ |advantage|.
       // (Whitespace tokens get no shading to keep it readable.)
@@ -1131,7 +1653,7 @@ function rlvrSlide() {
         : `rgba(244,63,94,${intensity})`;
     },
 
-    // ===== act 2 fast-forward =====
+    // ===== slide 3 fast-forward =====
     ffSnapshots: [
       {step: 0, acc: 12, length: 18, correct: false, label: 'base/SFT init — guesses, no real reasoning',
         completion: "x² + y² = 49 - 24 = 25. Wait that's not the question. Answer: 25."},
@@ -1176,7 +1698,7 @@ function rlvrSlide() {
     },
     init() {
       this.$watch('showMath', () => this._mathRefresh());
-      this.$watch('act',      () => this._mathRefresh());
+      this.$watch('slide',    () => this._mathRefresh());
       this.$watch('algo',     () => this._mathRefresh());
     },
   };
