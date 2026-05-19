@@ -35,12 +35,21 @@
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
 
-<div x-data="rlvrSlide()" x-init="init()" class="max-w-7xl mx-auto px-5 py-3"
+<div x-data="rlvrSlide()" x-init="init()"
+     class="mx-auto px-5 py-3"
+     :class="isFullscreen ? 'max-w-none h-screen flex flex-col [&>section]:flex-1 [&>section]:min-h-0' : 'max-w-7xl'"
      @keydown.window.arrow-right="next($event)"
-     @keydown.window.arrow-left="prev($event)">
+     @keydown.window.arrow-left="prev($event)"
+     @keydown.window.f="if (!['INPUT','TEXTAREA','SELECT'].includes(($event.target||{}).tagName)) toggleFullscreen()">
 
-  <!-- ====== Header ====== -->
-  <header class="flex items-center justify-end mb-3">
+  <!-- ====== Header (hidden in fullscreen) ====== -->
+  <header class="flex items-center justify-end gap-3 mb-3" :class="isFullscreen ? 'hidden' : ''">
+    <button @click="toggleFullscreen()"
+            class="text-sm text-slate-300 hover:text-white flex items-center gap-1.5 px-2 py-1 rounded border border-slate-700 hover:bg-slate-800"
+            title="Enter fullscreen (F)">
+      <span class="text-base">⛶</span>
+      <span>Fullscreen</span>
+    </button>
     <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none text-sm">
       <span class="text-xs text-slate-400">show math</span>
       <span class="relative inline-block w-9 h-5">
@@ -51,8 +60,8 @@
     </label>
   </header>
 
-  <!-- ====== Slide tabs ====== -->
-  <nav class="flex gap-2 mb-3 text-sm">
+  <!-- ====== Slide tabs (hidden in fullscreen) ====== -->
+  <nav class="flex gap-2 mb-3 text-sm" :class="isFullscreen ? 'hidden' : ''">
     <template x-for="(t,i) in slides" :key="i">
       <button
         @click="slide = i+1; if (i+1 === 2) spotIdx = 0; if (i+1 === 3) step = 1; if (i+1 === 5) s5Revealed = 1; if (i+1 === 6) q4Revealed = 1;"
@@ -64,12 +73,15 @@
     </template>
   </nav>
 
-  <!-- ====== Global Prev/Next nav bar (drives whole deck) ====== -->
+  <!-- ====== Global Prev/Next nav bar (drives whole deck; always visible) ====== -->
   <div class="card p-2 flex items-center gap-2 mb-3">
     <button @click="prev()" :disabled="!canPrev()"
             class="px-3 py-1.5 rounded border border-slate-700 text-slate-200 text-sm disabled:opacity-30 hover:bg-slate-800">◀ Prev</button>
     <div class="flex-1 text-center text-sm font-medium text-slate-100" x-text="positionLabel()"></div>
-    <span class="text-xs text-slate-600 hidden md:inline">← / → keys</span>
+    <span class="text-xs text-slate-600 hidden md:inline" x-show="!isFullscreen">← / → keys</span>
+    <button x-show="isFullscreen" @click="toggleFullscreen()"
+            class="px-2 py-1.5 rounded border border-slate-700 text-slate-300 text-sm hover:bg-slate-800"
+            title="Exit fullscreen (Esc)">✕ Exit</button>
     <button @click="next()" :disabled="!canNext()"
             class="px-3 py-1.5 rounded bg-violet-500 text-white text-sm disabled:opacity-30">Next ▶</button>
   </div>
@@ -326,7 +338,7 @@ Answer: x = 5</div>
           <div class="col-span-10 grid grid-cols-1 md:grid-cols-5 gap-2"
                @mouseleave="hoverInfo.visible = false">
             <template x-for="(r,i) in currentSample().rollouts" :key="sample + '-' + i">
-              <div class="rounded-lg p-2 text-xs flex flex-col gap-1 border transition-all duration-700"
+              <div class="rounded-lg p-2.5 text-sm flex flex-col gap-1.5 border transition-all duration-700"
                    :style="`transition-delay: ${step === 2 ? i * 140 : 0}ms;
                            opacity: ${step >= 2 ? 1 : 0.05};
                            transform: translateY(${step >= 2 ? '0' : '8px'});
@@ -340,7 +352,7 @@ Answer: x = 5</div>
                           x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></span>
                   </div>
                 </div>
-                <div :class="(sample === 'code' || sample === 'tool' || sample === 'market') ? 'text-slate-200 mono text-xs leading-snug break-words' : 'text-slate-200 leading-snug'"
+                <div :class="(sample === 'code' || sample === 'tool' || sample === 'market') ? 'text-slate-200 mono text-sm leading-snug break-words' : 'text-slate-200 text-sm leading-snug'"
                   ><template x-if="step < 4"
                     ><span class="whitespace-pre-wrap" x-text="r.text"></span
                   ></template
@@ -350,13 +362,14 @@ Answer: x = 5</div>
                         ><span class="rounded px-px transition-colors duration-700"
                               :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-violet-400/60 hover:ring-offset-0' : ''"
                               :style="`background-color: ${tokenShade(i, tok)}`"
-                              @mouseenter="onTokenHover(i, j, tok)"
+                              @mouseenter="onTokenHover(i, j, tok, $event)"
+                              @mousemove="onTokenHover(i, j, tok, $event)"
                               x-text="tok"></span
                       ></template
                     ></span
                   ></template
                 ></div>
-                <div x-show="step >= 3" class="text-xs mono text-slate-500 border-t border-slate-700/60 pt-1 mt-0.5">
+                <div x-show="step >= 3" class="text-sm mono text-slate-500 border-t border-slate-700/60 pt-1.5 mt-0.5">
                   <template x-if="r.tests">
                     <div class="flex items-center gap-2">
                       <div class="flex gap-0.5">
@@ -379,10 +392,10 @@ Answer: x = 5</div>
           </div>
         </div>
 
-        <!-- ===== HOVER POPOVER (overlays everything below; pointer-events:none) ===== -->
-        <div class="absolute z-50 left-1/2 -translate-x-1/2 pointer-events-none transition-opacity duration-200"
+        <!-- ===== HOVER POPOVER (follows cursor; pointer-events:none) ===== -->
+        <div class="fixed z-50 pointer-events-none transition-opacity duration-150"
              :class="hoverInfo.visible && step >= 4 ? 'opacity-100' : 'opacity-0'"
-             style="top: 100%; margin-top: 8px; width: 540px; max-width: calc(100% - 32px);">
+             :style="`left: ${hoverInfo.x}px; top: ${hoverInfo.y}px; width: 540px; max-width: calc(100vw - 16px);`">
           <div class="bg-slate-900/95 backdrop-blur border border-violet-400/50 rounded-lg p-3 text-xs shadow-2xl space-y-2">
             <div class="flex items-center justify-between gap-2">
               <div class="flex items-center gap-1.5 flex-wrap">
@@ -395,7 +408,7 @@ Answer: x = 5</div>
                    :class="hoverAdv() >= 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
                    x-text="'A = ' + (hoverAdv() >= 0 ? '+' : '') + hoverAdv().toFixed(2)"></div>
             </div>
-            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-xs leading-snug text-slate-300">
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-sm leading-snug text-slate-300">
               <span class="text-slate-500 text-xs uppercase tracking-wider mr-1.5">context →</span>
               <span x-text="hoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
             </div>
@@ -445,7 +458,7 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🐍 Python sandbox · pytest</div>
                   <span class="text-slate-400">each rollout's function is executed against this test suite:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug">
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-sm leading-snug">
                   <template x-for="(t, ti) in currentSample().unitTests" :key="ti">
                     <div class="text-slate-300">
                       <span class="text-slate-500" x-text="'test ' + (ti+1) + ': '"></span>
@@ -453,7 +466,7 @@ Answer: x = 5</div>
                     </div>
                   </template>
                 </div>
-                <div class="text-slate-400 text-xs">
+                <div class="text-slate-400 text-sm">
                   reward = (# tests passed) / 5 — each rollout's pass/fail row is shown above ↑ on its function card.
                 </div>
               </div>
@@ -466,7 +479,7 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🔧 Tool sandbox · rubric</div>
                   <span class="text-slate-400">each rollout is parsed, dispatched, and scored against this 5-point rubric:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug space-y-1">
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-sm leading-snug space-y-1">
                   <div class="text-slate-500 text-xs uppercase tracking-wider">tool registry (declared in the system prompt)</div>
                   <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
                     <div class="text-slate-300 pl-2" x-text="t"></div>
@@ -479,7 +492,7 @@ Answer: x = 5</div>
                     </div>
                   </template>
                 </div>
-                <div class="text-slate-400 text-xs">
+                <div class="text-slate-400 text-sm">
                   reward = (# rubric points satisfied) / 5 — each rollout's per-criterion row is shown above ↑ on its card.
                   Note: the format/schema checks gate everything downstream — a malformed call can't execute, and a tool that didn't run can't have its result used.
                 </div>
@@ -493,7 +506,7 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🎯 composite verifier · 5 components × 0.2 each</div>
                   <span class="text-slate-400">the trustworthy market-sizing agent has to satisfy every check at once:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug space-y-1">
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-sm leading-snug space-y-1">
                   <div class="text-slate-500 text-xs uppercase tracking-wider">toolbox available to the agent</div>
                   <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
                     <div class="text-slate-300 pl-2" x-text="t"></div>
@@ -509,7 +522,7 @@ Answer: x = 5</div>
                 </div>
                 <details class="bg-slate-900/40 border border-slate-700/60 rounded text-xs">
                   <summary class="px-2 py-1 text-slate-400 hover:text-slate-200 select-none">how this case was generated — the dataset is computed, not curated ▾</summary>
-                  <div class="px-2 pb-2 pt-1 mono text-xs leading-snug space-y-0.5">
+                  <div class="px-2 pb-2 pt-1 mono text-sm leading-snug space-y-0.5">
                     <template x-for="(line, li) in currentSample().generator" :key="li">
                     <div :class="line.trim().startsWith('#') ? 'text-slate-500' : (line.includes('tam =') ? 'text-emerald-300' : (line.includes('verifier') ? 'text-amber-300' : 'text-slate-300'))"
                          x-text="line || ' '"></div>
@@ -517,7 +530,7 @@ Answer: x = 5</div>
                     <div class="text-slate-400 mt-1.5" style="font-family: ui-sans-serif, system-ui, sans-serif;">this case sampled: <span class="mono text-slate-200">49M × 0.04 × 0.40 × 2,500 × 0.55</span> = <span class="mono text-emerald-200" x-text="currentSample().gt"></span></div>
                   </div>
                 </details>
-                <div class="text-slate-400 text-xs leading-relaxed">
+                <div class="text-slate-400 text-sm leading-relaxed">
                   Each rollout's check-row above ↑ shows which of the five components it satisfied — reward = (# components) / 5. A rollout that gets the right number from priors but skips the tools fails (3) and (5); one that calls tools cleanly but bugs the arithmetic fails (4). RLVR pushes the model toward the <em>one trajectory that's trustworthy on every axis</em> — and that trajectory looks the way a senior analyst would actually do the work.
                 </div>
               </div>
@@ -584,7 +597,7 @@ Answer: x = 5</div>
                 <template x-for="(r,i) in currentSample().rollouts" :key="i">
                   <div class="flex flex-col items-center" style="width: 18%; height: 100%;">
                     <div class="flex-1 w-full flex flex-col justify-end items-center">
-                      <div class="text-xs mono mb-0.5"
+                      <div class="text-sm mono mb-0.5 font-medium"
                            :class="groupStats().adv[i] >= 0 ? 'text-emerald-300' : 'text-rose-300'"
                            x-text="(groupStats().adv[i] >= 0 ? '+' : '') + groupStats().adv[i].toFixed(2)"></div>
                       <div class="w-full transition-all duration-700 rounded-t"
@@ -642,7 +655,8 @@ Answer: x = 5</div>
                 ><span class="rounded px-px transition-colors duration-700"
                       :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-emerald-400/60' : ''"
                       :style="`background-color: ${dpoTokenShade('chosen', tok)}`"
-                      @mouseenter="onDpoTokenHover('chosen', j, tok)"
+                      @mouseenter="onDpoTokenHover('chosen', j, tok, $event)"
+                      @mousemove="onDpoTokenHover('chosen', j, tok, $event)"
                       x-text="tok"></span
               ></template
             ></div></template>
@@ -658,17 +672,18 @@ Answer: x = 5</div>
                 ><span class="rounded px-px transition-colors duration-700"
                       :class="tok.trim() ? 'cursor-help hover:ring-1 hover:ring-rose-400/60' : ''"
                       :style="`background-color: ${dpoTokenShade('rejected', tok)}`"
-                      @mouseenter="onDpoTokenHover('rejected', j, tok)"
+                      @mouseenter="onDpoTokenHover('rejected', j, tok, $event)"
+                      @mousemove="onDpoTokenHover('rejected', j, tok, $event)"
                       x-text="tok"></span
               ></template
             ></div></template>
           </div>
         </div>
 
-        <!-- ===== DPO HOVER POPOVER ===== -->
-        <div class="absolute z-50 left-1/2 -translate-x-1/2 pointer-events-none transition-opacity duration-200"
+        <!-- ===== DPO HOVER POPOVER (follows cursor) ===== -->
+        <div class="fixed z-50 pointer-events-none transition-opacity duration-150"
              :class="dpoHoverInfo.visible && step >= 3 ? 'opacity-100' : 'opacity-0'"
-             style="top: 100%; margin-top: 8px; width: 540px; max-width: calc(100% - 32px);">
+             :style="`left: ${dpoHoverInfo.x}px; top: ${dpoHoverInfo.y}px; width: 540px; max-width: calc(100vw - 16px);`">
           <div class="bg-slate-900/95 backdrop-blur border rounded-lg p-3 text-xs shadow-2xl space-y-2"
                :class="dpoHoverInfo.side === 'chosen' ? 'border-emerald-400/50' : 'border-rose-400/50'">
             <div class="flex items-center justify-between gap-2">
@@ -684,7 +699,7 @@ Answer: x = 5</div>
                    :class="dpoHoverInfo.side === 'chosen' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
                    x-text="(dpoHoverInfo.side === 'chosen' ? '∇ pushes ↑' : '∇ pushes ↓') + '   g·β = ' + dpoG().toFixed(2) + '·β'"></div>
             </div>
-            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-xs leading-snug text-slate-300">
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-sm leading-snug text-slate-300">
               <span class="text-slate-500 text-xs uppercase tracking-wider mr-1.5">context →</span>
               <span x-text="dpoHoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
             </div>
@@ -846,17 +861,17 @@ Answer: x = 5</div>
   <!-- =================================================================== -->
   <!-- ============================  SLIDE 5  (closer · what we don't know) =-->
   <!-- =================================================================== -->
-  <section x-show="slide ===6" class="space-y-5">
-    <h2 class="text-3xl md:text-4xl font-semibold">…and yet, what we don't know</h2>
+  <section x-show="slide ===6" class="flex flex-col gap-3">
+    <h2 class="text-2xl md:text-3xl font-semibold">…and yet, what we don't know</h2>
 
     <div class="grid grid-cols-12 gap-5">
 
       <!-- Q1: teach vs elicit -->
-      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+      <div class="col-span-12 md:col-span-4 card p-4 flex flex-col transition-all duration-500"
            :class="q4Revealed >= 1 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
         <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 1</div>
-        <div class="font-semibold text-xl md:text-2xl mb-4">Does RL <em>teach</em> reasoning, or just <em>elicit</em> it?</div>
-        <div class="bg-slate-900/60 rounded p-4 font-mono text-sm space-y-3 flex-1 flex flex-col justify-center">
+        <div class="font-semibold text-lg md:text-xl mb-3">Does RL <em>teach</em> reasoning, or just <em>elicit</em> it?</div>
+        <div class="bg-slate-900/60 rounded p-3 font-mono text-sm space-y-2 flex-1 flex flex-col justify-center">
           <div class="flex items-center gap-2">
             <div class="w-20 text-slate-400 text-right">pass@1</div>
             <div class="flex-1 h-3 bg-slate-800 rounded overflow-hidden"><div class="h-full bg-slate-500" style="width: 22%"></div></div>
@@ -877,17 +892,17 @@ Answer: x = 5</div>
             <span class="ml-auto text-slate-600">AIME · Qwen2.5-7B, illustrative</span>
           </div>
         </div>
-        <div class="text-sm text-slate-300 italic mt-4">RL sharpens behaviors the base model could already produce — base overtakes at large k.</div>
+        <div class="text-sm text-slate-300 italic mt-3">RL sharpens behaviors the base model could already produce — base overtakes at large k.</div>
         <div class="text-xs text-slate-500 mt-2 leading-tight">
           <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2504.13837" target="_blank">Yue et al. 2025</a> · contested by <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2505.24864" target="_blank">ProRL (Liu et al. 2025)</a>
         </div>
       </div>
 
       <!-- Q2: reward hacking -->
-      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+      <div class="col-span-12 md:col-span-4 card p-4 flex flex-col transition-all duration-500"
            :class="q4Revealed >= 2 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
         <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 2</div>
-        <div class="font-semibold text-xl md:text-2xl mb-4">Reward hacking is real, and creative</div>
+        <div class="font-semibold text-lg md:text-xl mb-3">Reward hacking is real, and creative</div>
         <div class="bg-slate-900/60 rounded p-3 flex-1 flex flex-col">
           <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">exploits observed in the wild</div>
           <div class="grid grid-cols-2 gap-2 text-xs flex-1">
@@ -917,17 +932,17 @@ Answer: x = 5</div>
             </div>
           </div>
         </div>
-        <div class="text-sm text-slate-300 italic mt-4">KL leash helps — doesn't fix.</div>
+        <div class="text-sm text-slate-300 italic mt-3">KL leash helps — doesn't fix.</div>
         <div class="text-xs text-slate-500 mt-2 leading-tight">
           <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2503.11926" target="_blank">Baker et al. (OpenAI) 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2506.10947" target="_blank">Shao et al. 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2310.13548" target="_blank">Sharma et al. 2023</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2210.10760" target="_blank">Gao et al. 2022</a>
         </div>
       </div>
 
       <!-- Q3: not verifiable -->
-      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+      <div class="col-span-12 md:col-span-4 card p-4 flex flex-col transition-all duration-500"
            :class="q4Revealed >= 3 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
         <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 3</div>
-        <div class="font-semibold text-xl md:text-2xl mb-4">Most of what we want isn't verifiable</div>
+        <div class="font-semibold text-lg md:text-xl mb-3">Most of what we want isn't verifiable</div>
         <div class="grid grid-cols-2 gap-3 flex-1">
           <div class="bg-emerald-500/10 border border-emerald-500/30 rounded p-3 flex flex-col justify-center">
             <div class="text-xs uppercase tracking-wider text-emerald-300 mb-3">verifiable ✓</div>
@@ -972,7 +987,7 @@ Answer: x = 5</div>
             </div>
           </div>
         </div>
-        <div class="text-sm text-slate-300 italic mt-4">Reasoning gains transfer modestly to other reasoning — but often <em>regress</em> on instruction-following &amp; safety.</div>
+        <div class="text-sm text-slate-300 italic mt-3">Reasoning gains transfer modestly to other reasoning — but often <em>regress</em> on instruction-following &amp; safety.</div>
         <div class="text-xs text-slate-500 mt-2 leading-tight">
           <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2501.12948" target="_blank">DeepSeek-R1 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2507.00432" target="_blank">Huan et al. 2025</a>
         </div>
@@ -980,18 +995,14 @@ Answer: x = 5</div>
     </div>
 
     <!-- ===== Final takeaway (revealed last) ===== -->
-    <div class="card border-2 border-violet-400/70 p-6 md:p-10 text-center transition-all duration-500"
+    <div class="card border-2 border-violet-400/70 p-4 md:p-5 text-center transition-all duration-500"
          :class="q4Revealed >= 4 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
-      <div class="text-xs uppercase tracking-widest text-violet-400 mb-3">the takeaway</div>
-      <h3 class="text-2xl md:text-4xl font-semibold leading-tight max-w-4xl mx-auto">
-        The difficulty of writing the verifier <span class="grad-text">IS</span> the difficulty of formalizing the goal.
-      </h3>
-      <p class="text-base md:text-lg text-slate-300 max-w-3xl mx-auto mt-5 leading-relaxed">
-        Formulate your task in a way that's <strong class="text-violet-200">easily verifiable</strong>
+      <h3 class="text-xl md:text-3xl font-semibold leading-snug max-w-5xl mx-auto">
+        Formulate your task <span class="grad-text">verifiably</span>
         — and you're well-equipped not just to <em>train</em> a model on it, but to <em>use</em> one effectively.
-      </p>
-      <p class="text-sm text-slate-400 italic max-w-2xl mx-auto mt-4">
-        The same clarity that makes RL work makes any AI system work.
+      </h3>
+      <p class="text-base md:text-lg text-slate-300 italic max-w-3xl mx-auto mt-3 leading-snug">
+        The difficulty of writing the verifier <em class="not-italic text-violet-200 font-semibold">is</em> the difficulty of formalizing the goal.
       </p>
     </div>
   </section>
@@ -1144,6 +1155,7 @@ function rlvrSlide() {
   return {
     // ===== state =====
     slide: 1,
+    isFullscreen: false,
     // slide-1 sub-panel: 0..spotCount-1
     spotIdx: 0,
     spotCount: 2,
@@ -1152,8 +1164,8 @@ function rlvrSlide() {
     algo: 'grpo',
     reward: 'verifier',
     step: 1,            // 1..4 click-driven reveal for Act 1
-    hoverInfo: {visible: false, rolloutIdx: 0, tokenIdx: 0, token: ''},
-    dpoHoverInfo: {visible: false, side: null, tokenIdx: 0, token: ''},
+    hoverInfo: {visible: false, rolloutIdx: 0, tokenIdx: 0, token: '', x: 0, y: 0},
+    dpoHoverInfo: {visible: false, side: null, tokenIdx: 0, token: '', x: 0, y: 0},
     // Snapshot of π_θ's training state on each triple: implicit rewards m_w, m_l (per sample).
     // The margin and the gradient strength g are *computed*, not chosen.
     // A live training step would derive these from a forward pass over y_w and y_l.
@@ -1484,12 +1496,24 @@ function rlvrSlide() {
     prevStep() { if (this.step > 1) this.step--; this._mathRefresh(); },
     restart()  { this.step = 1; this.hoverInfo.visible = false; this.dpoHoverInfo.visible = false; this._mathRefresh(); },
 
-    // ===== token hover (replaces old step-5 zoom panel) =====
-    onTokenHover(rolloutIdx, tokenIdx, tok) {
+    // ===== token hover (popover follows cursor) =====
+    _popoverPos(ev, width = 540, height = 300, margin = 14) {
+      let x = (ev?.clientX ?? 0) + margin;
+      let y = (ev?.clientY ?? 0) + margin;
+      // Flip horizontally if it would overflow the right edge
+      if (x + width > window.innerWidth - 8) x = (ev?.clientX ?? 0) - width - margin;
+      // Flip vertically if it would overflow the bottom edge
+      if (y + height > window.innerHeight - 8) y = (ev?.clientY ?? 0) - height - margin;
+      x = Math.max(8, x);
+      y = Math.max(8, y);
+      return {x, y};
+    },
+    onTokenHover(rolloutIdx, tokenIdx, tok, ev) {
       if (this.step < 4) return;
       const trimmed = (tok || '').trim();
       if (!trimmed) return;
-      this.hoverInfo = {visible: true, rolloutIdx, tokenIdx, token: trimmed};
+      const {x, y} = this._popoverPos(ev);
+      this.hoverInfo = {visible: true, rolloutIdx, tokenIdx, token: trimmed, x, y};
     },
     hoverContext() {
       const rollout = this.currentSample().rollouts[this.hoverInfo.rolloutIdx];
@@ -1829,11 +1853,12 @@ function rlvrSlide() {
     },
 
     // ===== DPO token hover (chosen/rejected, no rollouts) =====
-    onDpoTokenHover(side, tokenIdx, tok) {
+    onDpoTokenHover(side, tokenIdx, tok, ev) {
       if (this.step < 3) return;
       const trimmed = (tok || '').trim();
       if (!trimmed) return;
-      this.dpoHoverInfo = {visible: true, side, tokenIdx, token: trimmed};
+      const {x, y} = this._popoverPos(ev);
+      this.dpoHoverInfo = {visible: true, side, tokenIdx, token: trimmed, x, y};
     },
     dpoHoverContext() {
       const text = (this.dpoHoverInfo.side === 'chosen')
@@ -1958,10 +1983,21 @@ function rlvrSlide() {
         }
       });
     },
+    toggleFullscreen() {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        document.documentElement.requestFullscreen().catch(() => {});
+      }
+    },
     init() {
       this.$watch('showMath', () => this._mathRefresh());
       this.$watch('slide',    () => this._mathRefresh());
       this.$watch('algo',     () => this._mathRefresh());
+      // Keep isFullscreen in sync with browser state (handles Esc too)
+      document.addEventListener('fullscreenchange', () => {
+        this.isFullscreen = !!document.fullscreenElement;
+      });
     },
   };
 }
