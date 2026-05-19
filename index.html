@@ -40,30 +40,22 @@
      @keydown.window.arrow-left="prev($event)">
 
   <!-- ====== Header ====== -->
-  <header class="flex items-center justify-between mb-3">
-    <div>
-      <div class="text-[10px] uppercase tracking-widest text-slate-400">Open-source LLM research, peek inside</div>
-      <h1 class="text-xl md:text-2xl font-semibold leading-tight">
-        How <span class="grad-text">RL with verifiable rewards</span> teaches LLMs to reason
-      </h1>
-    </div>
-    <div class="flex items-center gap-3 text-sm">
-      <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none">
-        <span class="text-xs text-slate-400">show math</span>
-        <span class="relative inline-block w-9 h-5">
-          <input type="checkbox" x-model="showMath" class="sr-only peer">
-          <span class="absolute inset-0 bg-slate-700 rounded-full peer-checked:bg-violet-500 transition"></span>
-          <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-4"></span>
-        </span>
-      </label>
-    </div>
+  <header class="flex items-center justify-end mb-3">
+    <label class="flex items-center gap-2 text-slate-300 cursor-pointer select-none text-sm">
+      <span class="text-xs text-slate-400">show math</span>
+      <span class="relative inline-block w-9 h-5">
+        <input type="checkbox" x-model="showMath" class="sr-only peer">
+        <span class="absolute inset-0 bg-slate-700 rounded-full peer-checked:bg-violet-500 transition"></span>
+        <span class="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full transition peer-checked:translate-x-4"></span>
+      </span>
+    </label>
   </header>
 
   <!-- ====== Slide tabs ====== -->
   <nav class="flex gap-2 mb-3 text-sm">
     <template x-for="(t,i) in slides" :key="i">
       <button
-        @click="slide = i+1; if (i+1 === 1) spotIdx = 0; if (i+1 === 2) step = 1;"
+        @click="slide = i+1; if (i+1 === 2) spotIdx = 0; if (i+1 === 3) step = 1; if (i+1 === 5) s5Revealed = 1; if (i+1 === 6) q4Revealed = 1;"
         :class="slide === i+1 ? 'bg-violet-500/20 border-violet-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
         class="px-3 py-1.5 rounded-lg border transition">
         <span class="text-xs text-slate-500 mr-1.5" x-text="'Slide ' + (i+1)"></span>
@@ -77,111 +69,208 @@
     <button @click="prev()" :disabled="!canPrev()"
             class="px-3 py-1.5 rounded border border-slate-700 text-slate-200 text-sm disabled:opacity-30 hover:bg-slate-800">◀ Prev</button>
     <div class="flex-1 text-center text-sm font-medium text-slate-100" x-text="positionLabel()"></div>
-    <span class="text-[10px] text-slate-600 hidden md:inline">← / → keys</span>
+    <span class="text-xs text-slate-600 hidden md:inline">← / → keys</span>
     <button @click="next()" :disabled="!canNext()"
             class="px-3 py-1.5 rounded bg-violet-500 text-white text-sm disabled:opacity-30">Next ▶</button>
   </div>
 
   <!-- =================================================================== -->
-  <!-- ============================  SLIDE 1  (warmup)  ================= -->
+  <!-- ============================  SLIDE 1  (intro)  ================== -->
   <!-- =================================================================== -->
   <section x-show="slide ===1"
-           class="card border-2 border-violet-400/60 p-6 md:p-10 min-h-[62vh] flex flex-col justify-center transition-colors duration-500">
+           class="card border-2 border-violet-400/60 p-6 md:p-10 min-h-[62vh] flex flex-col items-center justify-center text-center">
+    <h1 class="text-4xl md:text-6xl font-semibold leading-tight max-w-5xl">
+      Under the hood of <span class="grad-text">modern LLMs</span>
+    </h1>
+  </section>
 
-    <div class="text-center mb-4">
-      <div class="text-xs uppercase tracking-widest text-violet-400 mb-2">setup</div>
-      <h2 class="text-2xl md:text-4xl font-semibold leading-tight">
-        Same prompt. Three training stages. <span class="grad-text">Three different outputs.</span>
-      </h2>
-    </div>
+  <!-- =================================================================== -->
+  <!-- ============================  SLIDE 2  (warmup)  ================= -->
+  <!-- =================================================================== -->
+  <section x-show="slide ===2"
+           class="card border-2 border-violet-400/60 min-h-[62vh] p-6 md:p-10 flex flex-col justify-center">
 
-    <!-- Shared prompt -->
-    <div class="bg-slate-800/60 border border-blue-500/40 rounded-lg p-3 md:p-4 mx-auto max-w-3xl mb-5 text-base md:text-lg text-center">
-      <span class="text-[10px] text-blue-300 mr-2 uppercase tracking-widest">prompt</span>
-      <span class="mono">If 3x + 7 = 22, what is x?</span>
-    </div>
+    <!-- ===== Title (swaps) ===== -->
+    <h2 x-show="spotIdx === 0" class="text-2xl md:text-3xl font-semibold leading-tight text-slate-100 text-center mb-5">
+      From <span class="grad-text">base model</span> to <span class="grad-text">capable model</span>
+    </h2>
+    <h2 x-show="spotIdx === 1" class="text-2xl md:text-3xl font-semibold leading-tight text-slate-100 text-center mb-5">
+      What we <span class="grad-text">train on</span>
+    </h2>
 
-    <!-- Three columns -->
+    <!-- ===== Three fixed stage cards. Inner content uses CSS grid stacking
+              so both variants always occupy space → cards size to the LARGER
+              of the two variants and never resize between subpanels. ===== -->
     <div class="grid grid-cols-12 gap-2 md:gap-3 items-stretch">
 
-      <!-- Pretraining -->
+      <!-- ─── Stage 1 · Pretraining ─── -->
       <div class="col-span-12 md:col-span-4 flex">
+        <div class="hidden md:flex items-center justify-center text-3xl px-1 self-center invisible" aria-hidden="true">→</div>
         <div class="flex flex-col rounded-lg border-2 border-blue-400/60 bg-blue-500/5 p-4 w-full">
-          <div class="text-blue-300 text-[11px] uppercase tracking-widest mb-0.5">stage 1</div>
-          <div class="font-semibold text-lg md:text-xl">Pretraining</div>
-          <div class="text-[11px] text-blue-200/70 italic mb-3">predicts the next token; continues the pattern</div>
-          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">If 4x + 9 = 25, what is x?
+          <div class="text-blue-300 text-xs uppercase tracking-widest mb-0.5">stage 1</div>
+          <div class="font-semibold text-xl md:text-2xl mb-3">Pretraining</div>
+          <div class="grid flex-1">
+            <!-- variant 0 -->
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 0 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-blue-200/70 italic">predicts the next token; continues the pattern</div>
+              <div class="bg-slate-900/40 rounded-lg p-3 flex flex-col gap-2 flex-1">
+                <!-- user bubble -->
+                <div class="self-end max-w-[88%] bg-blue-500/20 border border-blue-400/30 rounded-2xl rounded-br-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100">If 3x + 7 = 22, what is x?</div>
+                </div>
+                <!-- assistant bubble -->
+                <div class="self-start max-w-[92%] bg-slate-800/80 border border-blue-400/30 rounded-2xl rounded-bl-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100 whitespace-pre-wrap leading-snug">If 4x + 9 = 25, what is x?
 If 2x − 5 = 11, what is x?
 If 5x + 3 = 18, what is x?
 If x/2 + 6 = 10, what is x?</div>
-          <div class="text-[11px] text-blue-200/80 italic mt-2 leading-snug">Looks like a textbook exercise list — so it generates more exercises.</div>
+                </div>
+              </div>
+              <div class="text-xs text-blue-200/80 italic leading-snug">Looks like a textbook exercise list — so it generates more exercises.</div>
+            </div>
+            <!-- variant 1 -->
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 1 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-blue-200/70 italic">next-token prediction on raw text</div>
+              <div class="bg-slate-900/70 rounded p-3 flex-1 flex flex-col">
+                <div class="text-xs uppercase tracking-wider text-slate-500 border-b border-slate-700/60 pb-1 mb-2 flex items-center justify-between">
+                  <span>Elementary Algebra · Ch. 4, p. 73</span>
+                  <span class="text-slate-600">excerpt</span>
+                </div>
+                <div class="text-sm md:text-base leading-relaxed text-slate-300 flex-1">
+                  <span class="text-slate-500">…</span>students should be able to solve simple linear equations by isolating the variable. For example, given 3x + 7 = 22, we subtract 7 from both sides to obtain 3x = 15, and divide by 3 to find x =<span class="text-amber-300 bg-amber-500/15 rounded px-1 mx-0.5 font-medium">5</span><span class="text-slate-500">. Notice that the same procedure works whenever…</span>
+                </div>
+                <div class="text-xs text-slate-500 italic pt-2 mt-2 border-t border-slate-700/60">
+                  target = the next token. Loss at every position.
+                </div>
+              </div>
+              <div class="text-xs text-blue-200/80 italic leading-snug">~10<sup>13</sup> tokens · raw scraped prose, no Q&amp;A structure.</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Arrow + SFT -->
+      <!-- ─── Stage 2 · SFT ─── -->
       <div class="col-span-12 md:col-span-4 flex">
         <div class="hidden md:flex items-center justify-center text-3xl text-slate-500 px-1 self-center">→</div>
         <div class="flex flex-col rounded-lg border-2 border-emerald-400/60 bg-emerald-500/5 p-4 w-full">
-          <div class="text-emerald-300 text-[11px] uppercase tracking-widest mb-0.5">stage 2</div>
-          <div class="font-semibold text-lg md:text-xl">Supervised Fine-Tuning <span class="text-emerald-300/60 text-sm font-normal">(SFT)</span></div>
-          <div class="text-[11px] text-emerald-200/70 italic mb-3">answers as an assistant; format, not new knowledge</div>
-          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">Subtract 7 from both sides:
+          <div class="text-emerald-300 text-xs uppercase tracking-widest mb-0.5">stage 2</div>
+          <div class="font-semibold text-xl md:text-2xl mb-3">Supervised Fine-Tuning <span class="text-emerald-300/60 text-sm font-normal">(SFT)</span></div>
+          <div class="grid flex-1">
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 0 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-emerald-200/70 italic">answers as an assistant; format, not new knowledge</div>
+              <div class="bg-slate-900/40 rounded-lg p-3 flex flex-col gap-2 flex-1">
+                <!-- user bubble -->
+                <div class="self-end max-w-[88%] bg-blue-500/20 border border-blue-400/30 rounded-2xl rounded-br-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100">If 3x + 7 = 22, what is x?</div>
+                </div>
+                <!-- assistant bubble -->
+                <div class="self-start max-w-[92%] bg-slate-800/80 border border-emerald-400/30 rounded-2xl rounded-bl-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100 whitespace-pre-wrap leading-snug">Subtract 7 from both sides:
 3x = 15
 Divide by 3:
 x = 5</div>
-          <div class="text-[11px] text-emerald-200/80 italic mt-2 leading-snug">Same weights, taught to <em>respond</em> rather than <em>continue</em>.</div>
+                </div>
+              </div>
+              <div class="text-xs text-emerald-200/80 italic leading-snug">Knowledge was already there — SFT just taught it to <em>respond</em>, not <em>continue</em>.</div>
+            </div>
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 1 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-emerald-200/70 italic">curated (instruction, response) pairs</div>
+              <div class="bg-slate-900/70 rounded p-3 flex-1 space-y-2">
+                <div class="text-xs uppercase tracking-wider text-slate-500">instruction</div>
+                <div class="font-mono text-sm md:text-base leading-snug text-slate-200">If 3x + 7 = 22, what is x?</div>
+                <div class="text-xs uppercase tracking-wider text-emerald-300 pt-1">response (target)</div>
+                <div class="font-mono text-sm md:text-base leading-snug text-amber-200 bg-amber-500/10 px-2 py-1 rounded">Subtract 7: 3x = 15. Divide by 3: x = 5.</div>
+                <div class="text-xs text-slate-500 italic pt-1 border-t border-slate-700/60">loss <em>only</em> on response tokens</div>
+              </div>
+              <div class="text-xs text-emerald-200/80 italic leading-snug">~10<sup>4</sup>–10<sup>6</sup> pairs · written by humans or stronger models.</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Arrow + RL -->
+      <!-- ─── Stage 3 · RL ─── -->
       <div class="col-span-12 md:col-span-4 flex">
         <div class="hidden md:flex items-center justify-center text-3xl text-slate-500 px-1 self-center">→</div>
         <div class="flex flex-col rounded-lg border-2 border-violet-400/60 bg-violet-500/5 p-4 w-full">
-          <div class="text-violet-300 text-[11px] uppercase tracking-widest mb-0.5">stage 3</div>
-          <div class="font-semibold text-lg md:text-xl">Reinforcement Learning <span class="text-violet-300/60 text-sm font-normal">(RL)</span></div>
-          <div class="text-[11px] text-violet-200/70 italic mb-3">thinks step-by-step, checks its own work</div>
-          <div class="bg-slate-900/70 rounded p-3 font-mono text-xs md:text-sm whitespace-pre-wrap leading-snug text-slate-200 flex-1">Let me solve step by step.
+          <div class="text-violet-300 text-xs uppercase tracking-widest mb-0.5">stage 3</div>
+          <div class="font-semibold text-xl md:text-2xl mb-3">Reinforcement Learning <span class="text-violet-300/60 text-sm font-normal">(RL)</span></div>
+          <div class="grid flex-1">
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 0 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-violet-200/70 italic">thinks step-by-step, checks its own work</div>
+              <div class="bg-slate-900/40 rounded-lg p-3 flex flex-col gap-2 flex-1">
+                <!-- user bubble -->
+                <div class="self-end max-w-[88%] bg-blue-500/20 border border-blue-400/30 rounded-2xl rounded-br-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100">If 3x + 7 = 22, what is x?</div>
+                </div>
+                <!-- assistant bubble -->
+                <div class="self-start max-w-[92%] bg-slate-800/80 border border-violet-400/30 rounded-2xl rounded-bl-sm px-3 py-1.5">
+                  <div class="font-mono text-sm md:text-base text-slate-100 whitespace-pre-wrap leading-snug">Let me solve step by step.
 3x + 7 = 22
 → subtract 7:  3x = 15
 → divide by 3: x = 5
 
 Check: 3(5) + 7 = 22 ✓
 Answer: x = 5</div>
-          <div class="text-[11px] text-violet-200/80 italic mt-2 leading-snug">Nobody taught it to "let me check" — RL kept rewarding rollouts that did.</div>
+                </div>
+              </div>
+              <div class="text-xs text-violet-200/80 italic leading-snug">Nobody taught it to "let me check" — RL kept rewarding rollouts that did.</div>
+            </div>
+            <div class="row-start-1 col-start-1 flex flex-col gap-2 transition-opacity duration-200"
+                 :class="spotIdx === 1 ? 'opacity-100' : 'opacity-0 invisible'">
+              <div class="text-xs text-violet-200/70 italic">(prompt, verifiable answer) — no demonstration</div>
+              <div class="bg-slate-900/70 rounded p-3 flex-1 space-y-2">
+                <div class="text-xs uppercase tracking-wider text-slate-500">prompt</div>
+                <div class="font-mono text-sm md:text-base leading-snug text-slate-200">If 3x + 7 = 22, what is x?</div>
+                <div class="text-xs uppercase tracking-wider text-violet-300 pt-1">verifiable answer</div>
+                <div class="font-mono text-base md:text-lg text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded inline-block">5</div>
+                <div class="text-xs text-slate-500 italic pt-1 border-t border-slate-700/60">verifier checks if model's final answer = 5</div>
+              </div>
+              <div class="text-xs text-violet-200/80 italic leading-snug">~10<sup>4</sup>+ problems · cheap to construct once you have a verifier.</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="text-sm md:text-base text-slate-400 italic text-center mt-5">
-      Same underlying weights at each stage. Post-training mostly <em>shapes</em> what's already there — it doesn't add knowledge.
+    <!-- ===== Footer line (swaps) ===== -->
+    <div x-show="spotIdx === 0" class="text-sm md:text-base text-slate-400 italic text-center mt-5">
+      All three stages share the same pretrained base. Post-training mostly <em>shapes</em> what's already there — it doesn't add new knowledge.
+    </div>
+    <div x-show="spotIdx === 1" class="text-sm md:text-base text-slate-400 italic text-center mt-5">
+      Notice the volume collapsing: <span class="mono text-blue-300">10¹³</span> → <span class="mono text-emerald-300">10⁶</span> → <span class="mono text-violet-300">10⁴</span>. Later stages need <em>less</em> data — but more carefully shaped.
     </div>
   </section>
 
   <!-- =================================================================== -->
   <!-- ============================  ACT 2  ============================== -->
   <!-- =================================================================== -->
-  <section x-show="slide ===2" class="space-y-4">
+  <section x-show="slide ===3" class="space-y-4">
 
     <!-- Top controls -->
-    <div class="card p-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+    <div class="card p-3 flex flex-wrap items-center gap-x-5 gap-y-2">
       <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-400">Sample</span>
+        <span class="text-sm text-slate-400">Sample</span>
         <template x-for="s in samples" :key="s.id">
           <button @click="setSample(s.id)"
             :class="sample === s.id ? 'bg-blue-500/20 border-blue-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
-            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="s.label"></button>
+            class="px-3 py-1 rounded-md border text-sm" x-text="s.label"></button>
         </template>
       </div>
       <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-400">Algo</span>
+        <span class="text-sm text-slate-400">Algo</span>
         <template x-for="a in algos" :key="a.id">
           <button @click="algo = a.id; restart()"
             :class="algo === a.id ? 'bg-emerald-500/20 border-emerald-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200'"
-            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="a.label"></button>
+            class="px-3 py-1 rounded-md border text-sm" x-text="a.label"></button>
         </template>
       </div>
       <div class="flex items-center gap-2">
-        <span class="text-xs text-slate-400">Reward</span>
+        <span class="text-sm text-slate-400">Reward</span>
         <template x-for="r in rewards" :key="r.id">
           <button @click="if(rewardAllowed(r.id)){reward=r.id; restart();}"
             :disabled="!rewardAllowed(r.id)"
@@ -189,7 +278,7 @@ Answer: x = 5</div>
               reward === r.id ? 'bg-amber-500/20 border-amber-400 text-white' : 'border-slate-700 text-slate-400 hover:text-slate-200',
               rewardAllowed(r.id) ? '' : 'opacity-30 cursor-not-allowed'
             ]"
-            class="px-2.5 py-0.5 rounded-md border text-xs" x-text="r.label"></button>
+            class="px-3 py-1 rounded-md border text-sm" x-text="r.label"></button>
         </template>
       </div>
     </div>
@@ -197,8 +286,8 @@ Answer: x = 5</div>
     <!-- Step indicator (advance via the global ← / → above; restart resets to step 1) -->
     <div class="card p-2 flex items-center gap-2">
       <div class="flex-1 text-center leading-tight">
-        <span class="text-[10px] text-slate-500 mr-1.5">Step <span class="text-violet-300 mono" x-text="step"></span>/<span class="mono" x-text="totalSteps()"></span></span>
-        <span class="text-sm font-medium text-slate-200" x-text="stepName(step)"></span>
+        <span class="text-sm text-slate-500 mr-1.5">Step <span class="text-violet-300 mono" x-text="step"></span>/<span class="mono" x-text="totalSteps()"></span></span>
+        <span class="text-base font-medium text-slate-200" x-text="stepName(step)"></span>
       </div>
       <button @click="restart()" class="px-2 py-1 rounded border border-slate-700 text-slate-400 text-xs">⟲ restart</button>
     </div>
@@ -210,13 +299,13 @@ Answer: x = 5</div>
       <div :class="step >= 1 ? 'opacity-100' : 'opacity-25'" class="transition-opacity duration-500">
         <div class="grid grid-cols-12 gap-3 items-center">
           <div class="col-span-2 text-right">
-            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 1</div>
-            <div class="text-xs text-blue-300 mt-0.5">Prompt</div>
+            <div class="text-sm uppercase tracking-wider text-slate-500">Step 1</div>
+            <div class="text-base text-blue-300 font-medium mt-0.5">Prompt</div>
           </div>
           <div class="col-span-10 flex items-center gap-2">
-            <div class="flex-1 bg-slate-800/60 border border-blue-500/40 rounded-lg px-3 py-1.5 text-sm" x-text="currentSample().prompt"></div>
-            <span class="text-slate-500 text-xs">→</span>
-            <div class="px-2 py-1 rounded bg-violet-500/10 border border-violet-400/40 text-xs whitespace-nowrap mono">
+            <div class="flex-1 bg-slate-800/60 border border-blue-500/40 rounded-lg px-3 py-2 text-base" x-text="currentSample().prompt"></div>
+            <span class="text-slate-500">→</span>
+            <div class="px-2 py-1 rounded bg-violet-500/10 border border-violet-400/40 text-sm whitespace-nowrap mono">
               π<sub>θ</sub><span x-show="algo==='ppo'" class="text-emerald-300"> + V<sub>φ</sub></span>
             </div>
           </div>
@@ -227,10 +316,10 @@ Answer: x = 5</div>
       <div :class="step >= 2 ? 'opacity-100' : 'opacity-25'" class="transition-opacity duration-500 relative">
         <div class="grid grid-cols-12 gap-3 items-start">
           <div class="col-span-2 text-right">
-            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 2</div>
-            <div class="text-xs text-violet-300 mt-0.5">Rollouts</div>
-            <div class="text-[10px] text-slate-500 mt-0.5 mono" x-text="'G = ' + currentSample().rollouts.length"></div>
-            <div x-show="step >= 4" class="text-[10px] text-violet-400 mt-1.5 italic leading-tight">
+            <div class="text-sm uppercase tracking-wider text-slate-500">Step 2</div>
+            <div class="text-base text-violet-300 font-medium mt-0.5">Rollouts</div>
+            <div class="text-xs text-slate-500 mt-0.5 mono" x-text="'G = ' + currentSample().rollouts.length"></div>
+            <div x-show="step >= 4" class="text-xs text-violet-400 mt-1.5 italic leading-tight">
               hover any token<br>↓
             </div>
           </div>
@@ -251,7 +340,7 @@ Answer: x = 5</div>
                           x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></span>
                   </div>
                 </div>
-                <div :class="(sample === 'code' || sample === 'tool' || sample === 'market') ? 'text-slate-200 mono text-[10.5px] leading-snug break-words' : 'text-slate-200 leading-snug'"
+                <div :class="(sample === 'code' || sample === 'tool' || sample === 'market') ? 'text-slate-200 mono text-xs leading-snug break-words' : 'text-slate-200 leading-snug'"
                   ><template x-if="step < 4"
                     ><span class="whitespace-pre-wrap" x-text="r.text"></span
                   ></template
@@ -267,7 +356,7 @@ Answer: x = 5</div>
                     ></span
                   ></template
                 ></div>
-                <div x-show="step >= 3" class="text-[10px] mono text-slate-500 border-t border-slate-700/60 pt-1 mt-0.5">
+                <div x-show="step >= 3" class="text-xs mono text-slate-500 border-t border-slate-700/60 pt-1 mt-0.5">
                   <template x-if="r.tests">
                     <div class="flex items-center gap-2">
                       <div class="flex gap-0.5">
@@ -302,18 +391,18 @@ Answer: x = 5</div>
                 <span class="text-slate-400">model chose</span>
                 <span class="mono text-amber-300" x-text="'“' + hoverInfo.token + '”'"></span>
               </div>
-              <div class="mono text-[11px] px-1.5 py-0.5 rounded"
+              <div class="mono text-xs px-1.5 py-0.5 rounded"
                    :class="hoverAdv() >= 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
                    x-text="'A = ' + (hoverAdv() >= 0 ? '+' : '') + hoverAdv().toFixed(2)"></div>
             </div>
-            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-[10.5px] leading-snug text-slate-300">
-              <span class="text-slate-500 text-[9px] uppercase tracking-wider mr-1.5">context →</span>
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-xs leading-snug text-slate-300">
+              <span class="text-slate-500 text-xs uppercase tracking-wider mr-1.5">context →</span>
               <span x-text="hoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
             </div>
             <div class="space-y-1">
               <template x-for="(c, ci) in hoverPanelData().candidates" :key="ci">
                 <div class="flex items-center gap-2">
-                  <div class="mono text-[11px] w-20 text-right truncate"
+                  <div class="mono text-xs w-20 text-right truncate"
                        :class="c.isChosen ? 'text-amber-300 font-medium' : 'text-slate-400'">
                     <span x-show="c.isChosen" class="text-amber-400">★ </span>
                     <span x-text="'“' + c.tok + '”'"></span>
@@ -324,7 +413,7 @@ Answer: x = 5</div>
                     <div class="absolute inset-y-0 left-0 transition-all duration-500 rounded"
                          :style="`width: ${hoverAfter(ci) * 100 * 1.6}%; background: ${hoverBarColor(ci)}`"></div>
                   </div>
-                  <div class="mono text-[10px] flex items-center gap-1 w-28 justify-end">
+                  <div class="mono text-xs flex items-center gap-1 w-28 justify-end">
                     <span class="text-slate-500" x-text="(c.p * 100).toFixed(0) + '%'"></span>
                     <span class="text-slate-600">→</span>
                     <span :class="hoverDelta(ci) > 0.0001 ? 'text-emerald-300' : (hoverDelta(ci) < -0.0001 ? 'text-rose-300' : 'text-slate-400')"
@@ -333,7 +422,7 @@ Answer: x = 5</div>
                 </div>
               </template>
             </div>
-            <div class="text-[10px] text-slate-500 italic">
+            <div class="text-xs text-slate-500 italic">
               Magnitudes ~30× exaggerated for visibility. Real per-step shifts are tiny — that's why we run this 100,000+ times (Act 2).
             </div>
           </div>
@@ -344,10 +433,10 @@ Answer: x = 5</div>
       <div :class="step >= 3 ? 'opacity-100' : 'opacity-15'" class="transition-opacity duration-500">
         <div class="grid grid-cols-12 gap-3 items-start">
           <div class="col-span-2 text-right">
-            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 3</div>
-            <div class="text-xs text-amber-300 mt-0.5">Score</div>
+            <div class="text-sm uppercase tracking-wider text-slate-500">Step 3</div>
+            <div class="text-base text-amber-300 font-medium mt-0.5">Score</div>
           </div>
-          <div class="col-span-10 bg-slate-800/40 border border-amber-500/30 rounded-lg p-3 text-xs space-y-2.5">
+          <div class="col-span-10 bg-slate-800/40 border border-amber-500/30 rounded-lg p-3 text-sm space-y-2.5">
 
             <!-- Code sample: show actual pytest sandbox + assert list -->
             <template x-if="sample === 'code' && currentSample().unitTests">
@@ -356,7 +445,7 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🐍 Python sandbox · pytest</div>
                   <span class="text-slate-400">each rollout's function is executed against this test suite:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug">
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug">
                   <template x-for="(t, ti) in currentSample().unitTests" :key="ti">
                     <div class="text-slate-300">
                       <span class="text-slate-500" x-text="'test ' + (ti+1) + ': '"></span>
@@ -364,7 +453,7 @@ Answer: x = 5</div>
                     </div>
                   </template>
                 </div>
-                <div class="text-slate-400 text-[11px]">
+                <div class="text-slate-400 text-xs">
                   reward = (# tests passed) / 5 — each rollout's pass/fail row is shown above ↑ on its function card.
                 </div>
               </div>
@@ -377,12 +466,12 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🔧 Tool sandbox · rubric</div>
                   <span class="text-slate-400">each rollout is parsed, dispatched, and scored against this 5-point rubric:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug space-y-1">
-                  <div class="text-slate-500 text-[10px] uppercase tracking-wider">tool registry (declared in the system prompt)</div>
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug space-y-1">
+                  <div class="text-slate-500 text-xs uppercase tracking-wider">tool registry (declared in the system prompt)</div>
                   <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
                     <div class="text-slate-300 pl-2" x-text="t"></div>
                   </template>
-                  <div class="text-slate-500 text-[10px] uppercase tracking-wider mt-2">rubric — each criterion contributes 0.2 to reward</div>
+                  <div class="text-slate-500 text-xs uppercase tracking-wider mt-2">rubric — each criterion contributes 0.2 to reward</div>
                   <template x-for="(c, ci) in currentSample().rubric" :key="ci">
                     <div class="text-slate-300 pl-2">
                       <span class="text-slate-500" x-text="(ci+1) + '.'"></span>
@@ -390,7 +479,7 @@ Answer: x = 5</div>
                     </div>
                   </template>
                 </div>
-                <div class="text-slate-400 text-[11px]">
+                <div class="text-slate-400 text-xs">
                   reward = (# rubric points satisfied) / 5 — each rollout's per-criterion row is shown above ↑ on its card.
                   Note: the format/schema checks gate everything downstream — a malformed call can't execute, and a tool that didn't run can't have its result used.
                 </div>
@@ -404,23 +493,23 @@ Answer: x = 5</div>
                   <div class="px-2 py-1 rounded bg-amber-500/20 text-amber-200 mono">🎯 composite verifier · 5 components × 0.2 each</div>
                   <span class="text-slate-400">the trustworthy market-sizing agent has to satisfy every check at once:</span>
                 </div>
-                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-[11px] leading-snug space-y-1">
-                  <div class="text-slate-500 text-[10px] uppercase tracking-wider">toolbox available to the agent</div>
+                <div class="bg-slate-900/60 border border-slate-700 rounded p-2 mono text-xs leading-snug space-y-1">
+                  <div class="text-slate-500 text-xs uppercase tracking-wider">toolbox available to the agent</div>
                   <template x-for="(t, ti) in currentSample().toolRegistry" :key="ti">
                     <div class="text-slate-300 pl-2" x-text="t"></div>
                   </template>
-                  <div class="text-slate-500 text-[10px] uppercase tracking-wider mt-2">rubric — each row borrows a verifier pattern from an earlier sample</div>
+                  <div class="text-slate-500 text-xs uppercase tracking-wider mt-2">rubric — each row borrows a verifier pattern from an earlier sample</div>
                   <template x-for="(c, ci) in currentSample().rubric" :key="ci">
                     <div class="text-slate-300 pl-2 flex items-baseline gap-2">
                       <span class="text-slate-500" x-text="(ci+1) + '.'"></span>
                       <span class="flex-1" x-text="c.check"></span>
-                      <span class="text-violet-300 text-[10px] whitespace-nowrap" x-text="'↩ ' + c.borrows"></span>
+                      <span class="text-violet-300 text-xs whitespace-nowrap" x-text="'↩ ' + c.borrows"></span>
                     </div>
                   </template>
                 </div>
-                <details class="bg-slate-900/40 border border-slate-700/60 rounded text-[11px]">
+                <details class="bg-slate-900/40 border border-slate-700/60 rounded text-xs">
                   <summary class="px-2 py-1 text-slate-400 hover:text-slate-200 select-none">how this case was generated — the dataset is computed, not curated ▾</summary>
-                  <div class="px-2 pb-2 pt-1 mono text-[10.5px] leading-snug space-y-0.5">
+                  <div class="px-2 pb-2 pt-1 mono text-xs leading-snug space-y-0.5">
                     <template x-for="(line, li) in currentSample().generator" :key="li">
                     <div :class="line.trim().startsWith('#') ? 'text-slate-500' : (line.includes('tam =') ? 'text-emerald-300' : (line.includes('verifier') ? 'text-amber-300' : 'text-slate-300'))"
                          x-text="line || ' '"></div>
@@ -428,7 +517,7 @@ Answer: x = 5</div>
                     <div class="text-slate-400 mt-1.5" style="font-family: ui-sans-serif, system-ui, sans-serif;">this case sampled: <span class="mono text-slate-200">49M × 0.04 × 0.40 × 2,500 × 0.55</span> = <span class="mono text-emerald-200" x-text="currentSample().gt"></span></div>
                   </div>
                 </details>
-                <div class="text-slate-400 text-[11px] leading-relaxed">
+                <div class="text-slate-400 text-xs leading-relaxed">
                   Each rollout's check-row above ↑ shows which of the five components it satisfied — reward = (# components) / 5. A rollout that gets the right number from priors but skips the tools fails (3) and (5); one that calls tools cleanly but bugs the arithmetic fails (4). RLVR pushes the model toward the <em>one trajectory that's trustworthy on every axis</em> — and that trajectory looks the way a senior analyst would actually do the work.
                 </div>
               </div>
@@ -448,12 +537,12 @@ Answer: x = 5</div>
                 <div class="grid grid-cols-5 gap-2 text-center">
                   <template x-for="(r,i) in currentSample().rollouts" :key="i">
                     <div class="bg-slate-900/50 rounded p-1.5">
-                      <div class="text-[10px] mono text-slate-500" x-text="'r' + (i+1)"></div>
+                      <div class="text-xs mono text-slate-500" x-text="'r' + (i+1)"></div>
                       <div class="mono text-slate-200 text-xs my-0.5" x-text="r.answer"></div>
                       <div class="text-base"
                            :class="r.reward >= 0.7 ? 'text-emerald-400' : (r.reward >= 0.3 ? 'text-amber-400' : 'text-rose-400')"
                            x-text="r.reward >= 0.7 ? '✓' : (r.reward >= 0.3 ? '~' : '✗')"></div>
-                      <div class="text-[10px] mono text-slate-500" x-text="'r=' + r.reward.toFixed(2)"></div>
+                      <div class="text-xs mono text-slate-500" x-text="'r=' + r.reward.toFixed(2)"></div>
                     </div>
                   </template>
                 </div>
@@ -467,11 +556,11 @@ Answer: x = 5</div>
       <div :class="step >= 4 ? 'opacity-100' : 'opacity-15'" class="transition-opacity duration-500">
         <div class="grid grid-cols-12 gap-3 items-start">
           <div class="col-span-2 text-right">
-            <div class="text-[10px] uppercase tracking-wider text-slate-500">Step 4</div>
-            <div class="text-xs text-purple-300 mt-0.5">Advantage</div>
-            <div class="text-[10px] text-slate-500 mt-0.5">+ token nudges</div>
+            <div class="text-sm uppercase tracking-wider text-slate-500">Step 4</div>
+            <div class="text-base text-purple-300 font-medium mt-0.5">Advantage</div>
+            <div class="text-xs text-slate-500 mt-0.5">+ token nudges</div>
           </div>
-          <div class="col-span-10 bg-slate-800/40 border border-purple-500/30 rounded-lg p-2.5 text-xs space-y-2">
+          <div class="col-span-10 bg-slate-800/40 border border-purple-500/30 rounded-lg p-3 text-sm space-y-2.5">
             <div class="text-slate-300 leading-snug">
               <span x-show="algo==='grpo'">
                 <strong class="text-emerald-300">GRPO:</strong> take the average reward of the group as a baseline. Each rollout's <em>advantage</em> is how much it beat (or lost to) that average. No critic network needed.
@@ -485,30 +574,30 @@ Answer: x = 5</div>
 
             <!-- Bar chart (compact) -->
             <div class="relative bg-slate-900/40 rounded p-2" style="height: 110px;">
-              <div class="absolute left-1 top-1 text-[9px] text-slate-500">reward</div>
+              <div class="absolute left-1 top-1 text-xs text-slate-500">reward</div>
               <div class="absolute left-2 right-2 border-t border-dashed border-amber-400/80 z-10"
                    :style="`top: ${8 + (1 - groupStats().mean) * 80}px`">
-                <span class="absolute -top-3.5 left-0 text-[10px] text-amber-300 mono"
+                <span class="absolute -top-3.5 left-0 text-xs text-amber-300 mono"
                       x-text="(algo === 'ppo' ? 'critic V_φ ≈ ' : 'average rollout  μ = ') + groupStats().mean.toFixed(2) + (algo === 'ppo' ? '   (group-mean stand-in)' : '')"></span>
               </div>
               <div class="absolute inset-0 px-2 pt-2 pb-5 flex items-end justify-around gap-2">
                 <template x-for="(r,i) in currentSample().rollouts" :key="i">
                   <div class="flex flex-col items-center" style="width: 18%; height: 100%;">
                     <div class="flex-1 w-full flex flex-col justify-end items-center">
-                      <div class="text-[10px] mono mb-0.5"
+                      <div class="text-xs mono mb-0.5"
                            :class="groupStats().adv[i] >= 0 ? 'text-emerald-300' : 'text-rose-300'"
                            x-text="(groupStats().adv[i] >= 0 ? '+' : '') + groupStats().adv[i].toFixed(2)"></div>
                       <div class="w-full transition-all duration-700 rounded-t"
                            :class="groupStats().adv[i] >= 0 ? 'bg-emerald-500/70' : 'bg-rose-500/70'"
                            :style="`height: ${r.reward * 80}px`"></div>
                     </div>
-                    <div class="text-[10px] text-slate-500 mt-0.5" x-text="'r' + (i+1)"></div>
+                    <div class="text-xs text-slate-500 mt-0.5" x-text="'r' + (i+1)"></div>
                   </div>
                 </template>
               </div>
             </div>
 
-            <div x-show="showMath" class="mono text-slate-300 space-y-0.5 text-[11px]">
+            <div x-show="showMath" class="mono text-slate-300 space-y-0.5 text-xs">
               <div x-text="'rewards = [' + currentSample().rollouts.map(r=>r.reward.toFixed(2)).join(', ') + '],  μ = ' + groupStats().mean.toFixed(2) + ',  σ = ' + groupStats().std.toFixed(2)"></div>
               <div class="text-purple-300" x-text="'advantages A_i = (r_i − μ)/σ = [' + groupStats().adv.map(a=>(a>=0?'+':'')+a.toFixed(2)).join(', ') + ']'"></div>
             </div>
@@ -516,47 +605,6 @@ Answer: x = 5</div>
         </div>
       </div>
 
-      <!-- ─── Info boxes (collapsed by default) ─── -->
-      <div class="grid grid-cols-12 gap-3 items-start pt-1">
-        <div class="col-span-2 text-right">
-          <div class="text-[10px] uppercase tracking-wider text-slate-500">Want more?</div>
-          <div class="text-[10px] text-slate-500">click any →</div>
-        </div>
-        <div class="col-span-10 grid grid-cols-2 md:grid-cols-4 gap-2">
-          <details class="bg-slate-800/40 border border-cyan-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
-            <summary class="text-cyan-200 font-medium">⛓ KL leash</summary>
-            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
-              At every update we also add a penalty β·KL(π<sub>θ</sub> ∥ π<sub>ref</sub>) — π<sub>ref</sub> is a frozen copy (usually the SFT init).
-              Without it, the model can drift into degenerate strategies that game the reward but produce gibberish.
-              <span x-show="showMath" class="block mt-1">$$\mathcal{L} = \mathcal{L}^{\text{clip}} - \beta\,\text{KL}(\pi_\theta \| \pi_{\text{ref}})$$</span>
-            </div>
-          </details>
-          <details class="bg-slate-800/40 border border-violet-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
-            <summary class="text-violet-200 font-medium">✂ Clipping</summary>
-            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
-              The actual loss uses an <em>importance ratio</em> ρ = π<sub>θ</sub>(token) / π<sub>θ_old</sub>(token), clipped to [1−ε, 1+ε] (ε≈0.2).
-              This prevents a single update from changing token probabilities by more than ~20%, which keeps training stable.
-              <span x-show="showMath" class="block mt-1">$$\mathcal{L}^{\text{clip}} = \mathbb{E}[\min(\rho A,\;\text{clip}(\rho,1-\epsilon,1+\epsilon)A)]$$</span>
-            </div>
-          </details>
-          <details class="bg-slate-800/40 border border-emerald-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
-            <summary class="text-emerald-200 font-medium">⚖ GRPO vs PPO</summary>
-            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
-              PPO trains a second network — a critic <span class="mono">V<sub>φ</sub></span> — to predict expected reward, and uses that as the baseline.
-              GRPO drops the critic entirely and uses the group's mean reward instead. Cheaper, simpler, surprisingly competitive.
-              The trade-off: PPO can give per-token (per-state) baselines via GAE; GRPO's baseline is per-prompt only.
-            </div>
-          </details>
-          <details class="bg-slate-800/40 border border-rose-500/30 rounded p-2 text-xs cursor-pointer hover:bg-slate-800/70 transition">
-            <summary class="text-rose-200 font-medium">⚠ Per-token caveat</summary>
-            <div class="mt-1.5 text-slate-300 text-[11px] leading-relaxed">
-              In GRPO every token in a rollout gets the <em>same</em> advantage signal (uniform shading above).
-              This is the credit-assignment problem: a "bad" rollout penalizes <em>all</em> its tokens equally, even ones that were fine in isolation.
-              Process reward models (PRMs) try to fix this by scoring intermediate steps — but they're hard to build well.
-            </div>
-          </details>
-        </div>
-      </div>
     </div>
 
     <!-- ===== DPO branch ===== -->
@@ -577,7 +625,7 @@ Answer: x = 5</div>
             <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500/40 to-purple-400 rounded-full transition-all duration-500"
                  :style="`width: ${dpoG() * 100}%`"></div>
           </div>
-          <div class="text-[10px] text-slate-500 italic leading-tight">
+          <div class="text-xs text-slate-500 italic leading-tight">
             snapshot of π<sub>θ</sub> at step ≈ <span class="mono" x-text="dpoSnapshotStep.toLocaleString()"></span>
             · switch samples — easier preferences have already saturated to smaller g
           </div>
@@ -586,7 +634,7 @@ Answer: x = 5</div>
           <div class="bg-emerald-500/10 border border-emerald-500/40 rounded-lg p-3 text-sm">
             <div class="text-emerald-300 text-xs mb-1 flex items-center gap-2">
               <span>CHOSEN</span>
-              <span x-show="step >= 3" class="text-[10px] text-emerald-400/80 italic font-normal">↑ probability pushed up</span>
+              <span x-show="step >= 3" class="text-xs text-emerald-400/80 italic font-normal">↑ probability pushed up</span>
             </div>
             <template x-if="step < 3"><div class="whitespace-pre-wrap" x-text="currentSample().chosen"></div></template>
             <template x-if="step >= 3"><div class="whitespace-pre-wrap leading-relaxed"
@@ -602,7 +650,7 @@ Answer: x = 5</div>
           <div class="bg-rose-500/10 border border-rose-500/40 rounded-lg p-3 text-sm">
             <div class="text-rose-300 text-xs mb-1 flex items-center gap-2">
               <span>REJECTED</span>
-              <span x-show="step >= 3" class="text-[10px] text-rose-400/80 italic font-normal">↓ probability pushed down</span>
+              <span x-show="step >= 3" class="text-xs text-rose-400/80 italic font-normal">↓ probability pushed down</span>
             </div>
             <template x-if="step < 3"><div class="whitespace-pre-wrap" x-text="currentSample().rejected"></div></template>
             <template x-if="step >= 3"><div class="whitespace-pre-wrap leading-relaxed"
@@ -632,18 +680,18 @@ Answer: x = 5</div>
                 <span class="text-slate-400">token</span>
                 <span class="mono text-amber-300" x-text="'“' + dpoHoverInfo.token + '”'"></span>
               </div>
-              <div class="mono text-[11px] px-1.5 py-0.5 rounded"
+              <div class="mono text-xs px-1.5 py-0.5 rounded"
                    :class="dpoHoverInfo.side === 'chosen' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'"
                    x-text="(dpoHoverInfo.side === 'chosen' ? '∇ pushes ↑' : '∇ pushes ↓') + '   g·β = ' + dpoG().toFixed(2) + '·β'"></div>
             </div>
-            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-[10.5px] leading-snug text-slate-300">
-              <span class="text-slate-500 text-[9px] uppercase tracking-wider mr-1.5">context →</span>
+            <div class="bg-slate-800/60 border border-slate-700 rounded p-2 mono text-xs leading-snug text-slate-300">
+              <span class="text-slate-500 text-xs uppercase tracking-wider mr-1.5">context →</span>
               <span x-text="dpoHoverContext()"></span><span class="text-amber-300/70 ml-0.5">▍</span>
             </div>
             <div class="space-y-1">
               <template x-for="(c, ci) in dpoHoverPanelData().candidates" :key="ci">
                 <div class="flex items-center gap-2">
-                  <div class="mono text-[11px] w-20 text-right truncate"
+                  <div class="mono text-xs w-20 text-right truncate"
                        :class="c.isChosen ? 'text-amber-300 font-medium' : 'text-slate-400'">
                     <span x-show="c.isChosen" class="text-amber-400">★ </span>
                     <span x-text="'“' + c.tok + '”'"></span>
@@ -654,7 +702,7 @@ Answer: x = 5</div>
                     <div class="absolute inset-y-0 left-0 transition-all duration-500 rounded"
                          :style="`width: ${dpoHoverAfter(ci) * 100 * 1.6}%; background: ${dpoHoverBarColor(ci)}`"></div>
                   </div>
-                  <div class="mono text-[10px] flex items-center gap-1 w-28 justify-end">
+                  <div class="mono text-xs flex items-center gap-1 w-28 justify-end">
                     <span class="text-slate-500" x-text="(c.p * 100).toFixed(0) + '%'"></span>
                     <span class="text-slate-600">→</span>
                     <span :class="dpoHoverDelta(ci) > 0.0001 ? 'text-emerald-300' : (dpoHoverDelta(ci) < -0.0001 ? 'text-rose-300' : 'text-slate-400')"
@@ -663,7 +711,7 @@ Answer: x = 5</div>
                 </div>
               </template>
             </div>
-            <div class="text-[10px] text-slate-500 italic leading-snug pt-0.5 border-t border-slate-700/60">
+            <div class="text-xs text-slate-500 italic leading-snug pt-0.5 border-t border-slate-700/60">
               Each token's gradient gets multiplied by g·β, with g read off the derivation panel above. Same g for every token in this sequence — DPO has no per-token credit assignment.
             </div>
           </div>
@@ -699,11 +747,11 @@ Answer: x = 5</div>
   <!-- =================================================================== -->
   <!-- ============================  ACT 3  ============================== -->
   <!-- =================================================================== -->
-  <section x-show="slide ===3" class="grid grid-cols-12 gap-5">
+  <section x-show="slide ===4" class="grid grid-cols-12 gap-5">
 
     <div class="col-span-12 card p-4">
       <div class="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div class="text-sm text-slate-300">Now run that loop <span class="text-violet-300 font-medium">tens of thousands of times</span>.</div>
+        <div class="text-2xl md:text-3xl font-semibold text-slate-100">Scale up.</div>
         <div class="ml-auto flex items-center gap-3">
           <button @click="ffPlay()" class="px-3 py-1.5 rounded-md bg-violet-500 text-white text-sm">
             <span x-text="ffPlaying ? '⏸ Pause' : '▶ Fast-forward training'"></span>
@@ -721,7 +769,7 @@ Answer: x = 5</div>
 
     <!-- Reward curve -->
     <div class="col-span-12 lg:col-span-7 card p-4">
-      <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Pass rate on held-out math problems</div>
+      <div class="text-sm uppercase tracking-wider text-slate-400 mb-2">Pass rate on held-out math problems</div>
       <svg viewBox="0 0 600 280" class="w-full h-64">
         <!-- axes -->
         <line x1="50" y1="240" x2="580" y2="240" stroke="#475569"/>
@@ -729,16 +777,16 @@ Answer: x = 5</div>
         <!-- y-axis labels -->
         <template x-for="t in [0,25,50,75,100]" :key="t">
           <g>
-            <text :x="40" :y="240 - t*2.2 + 3" fill="#64748b" font-size="10" text-anchor="end" x-text="t + '%'"></text>
+            <text :x="40" :y="240 - t*2.2 + 3" fill="#64748b" font-size="12" text-anchor="end" x-text="t + '%'"></text>
             <line :x1="50" :y1="240 - t*2.2" :x2="580" :y2="240 - t*2.2" stroke="#1e293b"/>
           </g>
         </template>
         <!-- x-axis labels -->
         <template x-for="(snap,i) in ffSnapshots" :key="i">
-          <text :x="50 + i*(530/(ffSnapshots.length-1))" y="258" fill="#64748b" font-size="10" text-anchor="middle"
+          <text :x="50 + i*(530/(ffSnapshots.length-1))" y="258" fill="#64748b" font-size="12" text-anchor="middle"
                 x-text="snap.step >= 1000 ? (snap.step/1000) + 'k' : snap.step"></text>
         </template>
-        <text x="315" y="275" fill="#94a3b8" font-size="11" text-anchor="middle">training steps</text>
+        <text x="315" y="275" fill="#94a3b8" font-size="13" text-anchor="middle">training steps</text>
         <!-- curve -->
         <polyline
           :points="ffSnapshots.map((s,i)=> (50 + i*(530/(ffSnapshots.length-1))) + ',' + (240 - s.acc*2.2)).join(' ')"
@@ -757,9 +805,9 @@ Answer: x = 5</div>
         <!-- legend -->
         <g transform="translate(420,30)">
           <line x1="0" y1="6" x2="20" y2="6" stroke="#a78bfa" stroke-width="2.5"/>
-          <text x="26" y="10" fill="#cbd5e1" font-size="11">pass rate</text>
+          <text x="26" y="10" fill="#cbd5e1" font-size="13">pass rate</text>
           <line x1="0" y1="22" x2="20" y2="22" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="4 3"/>
-          <text x="26" y="26" fill="#cbd5e1" font-size="11">avg response length (×8 tok)</text>
+          <text x="26" y="26" fill="#cbd5e1" font-size="13">avg response length (×8 tok)</text>
         </g>
       </svg>
       <div class="text-xs text-slate-400 italic mt-2">
@@ -770,16 +818,16 @@ Answer: x = 5</div>
 
     <!-- Evolving completion -->
     <div class="col-span-12 lg:col-span-5 card p-4 flex flex-col">
-      <div class="text-xs uppercase tracking-wider text-slate-400 mb-2">Same prompt, different training step</div>
-      <div class="bg-slate-800/60 border border-blue-500/30 rounded-lg p-3 text-sm mb-3">
+      <div class="text-sm uppercase tracking-wider text-slate-400 mb-2">Same prompt, different training step</div>
+      <div class="bg-slate-800/60 border border-blue-500/30 rounded-lg p-3 text-base mb-3">
         <span class="text-xs text-blue-300 mr-2">PROMPT</span>
         If $a + b = 7$ and $ab = 12$, what is $a^2 + b^2$?
       </div>
-      <div class="text-xs text-slate-400 mb-1">
+      <div class="text-sm text-slate-400 mb-1">
         <span class="mono text-violet-300" x-text="'step ≈ ' + currentSnapshot().step.toLocaleString()"></span>
         — <span x-text="currentSnapshot().label"></span>
       </div>
-      <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-3 text-sm font-mono whitespace-pre-wrap leading-relaxed flex-1 min-h-[200px]"
+      <div class="bg-slate-800/40 border border-slate-700 rounded-lg p-3 text-base font-mono whitespace-pre-wrap leading-relaxed flex-1 min-h-[200px]"
            x-text="currentSnapshot().completion"></div>
       <div class="text-xs mt-2">
         <span class="chip" :class="currentSnapshot().correct ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'"
@@ -788,119 +836,304 @@ Answer: x = 5</div>
       </div>
     </div>
 
-    <div class="col-span-12 card p-4 text-sm text-slate-300">
-      <div class="font-medium text-violet-200 mb-1">The punchline</div>
-      Each loop nudges the model by a tiny amount. Done a few hundred thousand times — across thousands of math, code, and logic problems —
-      those nudges compound into the long, self-correcting chains of reasoning we see in models like DeepSeek-R1, Qwen-3 reasoning, GPT-o-series, and Claude's extended thinking.
-      No-one explicitly taught the model to say <em>"wait, let me reconsider."</em> The verifier just kept rewarding rollouts that arrived at the right answer,
-      and the model figured out that going slow and checking its work was the strategy with the highest expected reward.
+    <div class="col-span-12 card p-4 flex items-center justify-center text-center gap-4 flex-wrap">
+      <span class="mono text-violet-300 text-lg">tiny nudges × 100k+ steps</span>
+      <span class="text-2xl text-slate-500">→</span>
+      <span class="text-slate-100 text-lg">emergent <em class="text-violet-200">"wait, let me reconsider."</em></span>
     </div>
   </section>
 
   <!-- =================================================================== -->
-  <!-- ============================  ACT 4  ============================== -->
+  <!-- ============================  SLIDE 5  (closer · what we don't know) =-->
   <!-- =================================================================== -->
-  <section x-show="slide ===4" class="grid grid-cols-12 gap-5">
-    <div class="col-span-12">
-      <h2 class="text-xl font-semibold mb-1">…and yet, what we don't know</h2>
-      <p class="text-sm text-slate-400 max-w-3xl">
-        The mechanics above are well understood. The deeper questions about <em>why</em> this works as well as it does, and where it breaks, are very much open.
-        Honest version of the slide:
+  <section x-show="slide ===6" class="space-y-5">
+    <h2 class="text-3xl md:text-4xl font-semibold">…and yet, what we don't know</h2>
+
+    <div class="grid grid-cols-12 gap-5">
+
+      <!-- Q1: teach vs elicit -->
+      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+           :class="q4Revealed >= 1 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 1</div>
+        <div class="font-semibold text-xl md:text-2xl mb-4">Does RL <em>teach</em> reasoning, or just <em>elicit</em> it?</div>
+        <div class="bg-slate-900/60 rounded p-4 font-mono text-sm space-y-3 flex-1 flex flex-col justify-center">
+          <div class="flex items-center gap-2">
+            <div class="w-20 text-slate-400 text-right">pass@1</div>
+            <div class="flex-1 h-3 bg-slate-800 rounded overflow-hidden"><div class="h-full bg-slate-500" style="width: 22%"></div></div>
+            <span class="text-slate-500">→</span>
+            <div class="flex-1 h-3 bg-slate-800 rounded overflow-hidden"><div class="h-full bg-violet-500" style="width: 52%"></div></div>
+            <span class="w-12 text-right text-emerald-400">+30</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="w-20 text-slate-400 text-right">pass@256</div>
+            <div class="flex-1 h-3 bg-slate-800 rounded overflow-hidden"><div class="h-full bg-slate-500" style="width: 65%"></div></div>
+            <span class="text-slate-500">→</span>
+            <div class="flex-1 h-3 bg-slate-800 rounded overflow-hidden"><div class="h-full bg-violet-500" style="width: 63%"></div></div>
+            <span class="w-12 text-right text-rose-400">−2</span>
+          </div>
+          <div class="flex gap-3 text-xs text-slate-500 pt-3 border-t border-slate-700/60 mt-2">
+            <span class="flex items-center gap-1"><span class="w-2 h-2 bg-slate-500 rounded inline-block"></span>base</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-2 bg-violet-500 rounded inline-block"></span>after RL</span>
+            <span class="ml-auto text-slate-600">AIME · Qwen2.5-7B, illustrative</span>
+          </div>
+        </div>
+        <div class="text-sm text-slate-300 italic mt-4">RL sharpens behaviors the base model could already produce — base overtakes at large k.</div>
+        <div class="text-xs text-slate-500 mt-2 leading-tight">
+          <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2504.13837" target="_blank">Yue et al. 2025</a> · contested by <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2505.24864" target="_blank">ProRL (Liu et al. 2025)</a>
+        </div>
+      </div>
+
+      <!-- Q2: reward hacking -->
+      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+           :class="q4Revealed >= 2 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 2</div>
+        <div class="font-semibold text-xl md:text-2xl mb-4">Reward hacking is real, and creative</div>
+        <div class="bg-slate-900/60 rounded p-3 flex-1 flex flex-col">
+          <div class="text-xs uppercase tracking-wider text-slate-500 mb-2">exploits observed in the wild</div>
+          <div class="grid grid-cols-2 gap-2 text-xs flex-1">
+
+            <div class="bg-rose-500/8 border border-rose-500/30 rounded p-2.5 flex flex-col gap-1.5">
+              <div class="text-rose-200 font-medium text-xs uppercase tracking-wider">reasoning theater</div>
+              <div class="mono text-xs text-slate-200 leading-snug bg-slate-900/60 rounded px-1.5 py-1 flex-1">"…wait, let me reconsider…<br>actually, let me check…"<br>[conclusion unchanged]</div>
+              <div class="text-xs text-slate-400 italic">verbose ≠ thoughtful</div>
+            </div>
+
+            <div class="bg-rose-500/8 border border-rose-500/30 rounded p-2.5 flex flex-col gap-1.5">
+              <div class="text-rose-200 font-medium text-xs uppercase tracking-wider">format gaming</div>
+              <div class="mono text-xs text-slate-200 leading-snug bg-slate-900/60 rounded px-1.5 py-1 flex-1">verifier: parses \boxed{}<br>model: \boxed{5}<wbr>\boxed{7}<wbr>\boxed{12}<wbr>\boxed{42}…</div>
+              <div class="text-xs text-slate-400 italic">hedge across answers; one will match</div>
+            </div>
+
+            <div class="bg-rose-500/8 border border-rose-500/30 rounded p-2.5 flex flex-col gap-1.5">
+              <div class="text-rose-200 font-medium text-xs uppercase tracking-wider">spurious rewards</div>
+              <div class="mono text-xs text-slate-200 leading-snug bg-slate-900/60 rounded px-1.5 py-1 flex-1">reward = random / wrong-format /<br>"output contains digit 7"<br>Qwen2.5-Math: still <strong>+20% on MATH</strong></div>
+              <div class="text-xs text-slate-400 italic">signal didn't matter — sharpening did</div>
+            </div>
+
+            <div class="bg-rose-500/8 border border-rose-500/30 rounded p-2.5 flex flex-col gap-1.5">
+              <div class="text-rose-200 font-medium text-xs uppercase tracking-wider">judge sycophancy</div>
+              <div class="mono text-xs text-slate-200 leading-snug bg-slate-900/60 rounded px-1.5 py-1 flex-1">user: "I think the answer is 6,<br>right?"<br>model: "Yes, 6 is correct." (it's 5)</div>
+              <div class="text-xs text-slate-400 italic">agreement scores higher than correctness</div>
+            </div>
+          </div>
+        </div>
+        <div class="text-sm text-slate-300 italic mt-4">KL leash helps — doesn't fix.</div>
+        <div class="text-xs text-slate-500 mt-2 leading-tight">
+          <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2503.11926" target="_blank">Baker et al. (OpenAI) 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2506.10947" target="_blank">Shao et al. 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2310.13548" target="_blank">Sharma et al. 2023</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2210.10760" target="_blank">Gao et al. 2022</a>
+        </div>
+      </div>
+
+      <!-- Q3: not verifiable -->
+      <div class="col-span-12 md:col-span-4 card p-5 md:p-6 flex flex-col min-h-[580px] transition-all duration-500"
+           :class="q4Revealed >= 3 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-amber-300 text-xs uppercase tracking-widest mb-1">open question 3</div>
+        <div class="font-semibold text-xl md:text-2xl mb-4">Most of what we want isn't verifiable</div>
+        <div class="grid grid-cols-2 gap-3 flex-1">
+          <div class="bg-emerald-500/10 border border-emerald-500/30 rounded p-3 flex flex-col justify-center">
+            <div class="text-xs uppercase tracking-wider text-emerald-300 mb-3">verifiable ✓</div>
+            <div class="space-y-2.5">
+              <div>
+                <div class="text-sm mono text-slate-200">math</div>
+                <div class="text-xs text-emerald-300/70 italic leading-tight">unique numeric answer</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">code</div>
+                <div class="text-xs text-emerald-300/70 italic leading-tight">tests pass / fail</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">theorems</div>
+                <div class="text-xs text-emerald-300/70 italic leading-tight">mechanical proof check</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">tool use</div>
+                <div class="text-xs text-emerald-300/70 italic leading-tight">action executes correctly</div>
+              </div>
+            </div>
+          </div>
+          <div class="bg-rose-500/10 border border-rose-500/30 rounded p-3 flex flex-col justify-center">
+            <div class="text-xs uppercase tracking-wider text-rose-300 mb-3">not verifiable</div>
+            <div class="space-y-2.5">
+              <div>
+                <div class="text-sm mono text-slate-200">good email</div>
+                <div class="text-xs text-rose-300/70 italic leading-tight">subjective taste</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">good story</div>
+                <div class="text-xs text-rose-300/70 italic leading-tight">many valid forms</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">"safe" answer</div>
+                <div class="text-xs text-rose-300/70 italic leading-tight">multi-objective tradeoff</div>
+              </div>
+              <div>
+                <div class="text-sm mono text-slate-200">helpful advice</div>
+                <div class="text-xs text-rose-300/70 italic leading-tight">context-dependent</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="text-sm text-slate-300 italic mt-4">Reasoning gains transfer modestly to other reasoning — but often <em>regress</em> on instruction-following &amp; safety.</div>
+        <div class="text-xs text-slate-500 mt-2 leading-tight">
+          <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2501.12948" target="_blank">DeepSeek-R1 2025</a> · <a class="underline decoration-dotted hover:text-slate-300" href="https://arxiv.org/abs/2507.00432" target="_blank">Huan et al. 2025</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== Final takeaway (revealed last) ===== -->
+    <div class="card border-2 border-violet-400/70 p-6 md:p-10 text-center transition-all duration-500"
+         :class="q4Revealed >= 4 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+      <div class="text-xs uppercase tracking-widest text-violet-400 mb-3">the takeaway</div>
+      <h3 class="text-2xl md:text-4xl font-semibold leading-tight max-w-4xl mx-auto">
+        The difficulty of writing the verifier <span class="grad-text">IS</span> the difficulty of formalizing the goal.
+      </h3>
+      <p class="text-base md:text-lg text-slate-300 max-w-3xl mx-auto mt-5 leading-relaxed">
+        Formulate your task in a way that's <strong class="text-violet-200">easily verifiable</strong>
+        — and you're well-equipped not just to <em>train</em> a model on it, but to <em>use</em> one effectively.
       </p>
-    </div>
-
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 1</div>
-      <div class="font-medium mb-2">Does RL <em>teach</em> reasoning, or just <em>elicit</em> it?</div>
-      <div class="text-sm text-slate-300">
-        On many benchmarks, <span class="mono">pass@1</span> improves dramatically after RL — but <span class="mono">pass@k</span> at large k often doesn't.
-        That suggests RL is sharpening behaviors the base model could already produce sometimes,
-        not adding fundamentally new skills. We don't yet have a clean test that settles it either way.
-      </div>
-    </div>
-
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 2</div>
-      <div class="font-medium mb-2">Reward hacking is real and weird</div>
-      <div class="text-sm text-slate-300">
-        Models discover shortcuts: padding answers with reasoning theater that doesn't change the conclusion,
-        gaming format checks, exploiting bugs in the verifier, or — with LLM judges — learning what the judge <em>likes</em>
-        rather than what's actually correct. The KL leash helps; it doesn't fix it.
-      </div>
-    </div>
-
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">Open question 3</div>
-      <div class="font-medium mb-2">Most of what we want isn't verifiable</div>
-      <div class="text-sm text-slate-300">
-        "Was this email helpful? Was this story good? Was that answer safe?" — there's no <span class="mono">\boxed{}</span> to check.
-        For those domains we fall back to <em>preference</em> learning (RLHF, DPO) or <em>generative reward models</em> (an LLM scoring against a rubric).
-        Whether the reasoning gains from verifiable RL <em>transfer</em> to these messier domains is an active area of research.
-      </div>
-    </div>
-
-    <div class="col-span-12 card p-4 text-sm text-slate-300">
-      <div class="font-medium text-violet-200 mb-1">The takeaway</div>
-      A simple loop — generate a few attempts, score them with a checker, nudge the model toward the better ones —
-      is the engine behind a lot of the reasoning ability of today's frontier models.
-      It's not magic; the math fits on one slide. But it works astonishingly well at scale,
-      and the open-source community is still mapping out exactly why and exactly where.
+      <p class="text-sm text-slate-400 italic max-w-2xl mx-auto mt-4">
+        The same clarity that makes RL work makes any AI system work.
+      </p>
     </div>
   </section>
 
   <!-- =================================================================== -->
-  <!-- ============================  ACT 5  (synthesis)  ================ -->
+  <!-- ============================  SLIDE 4  (data and scale)  ========= -->
   <!-- =================================================================== -->
-  <section x-show="slide ===5" class="grid grid-cols-12 gap-5">
+  <section x-show="slide ===5" class="space-y-5">
 
-    <div class="col-span-12">
-      <h2 class="text-xl font-semibold mb-1">The loop is the easy part. The <span class="grad-text">data</span> and the <span class="grad-text">scale</span> are everything.</h2>
-      <p class="text-sm text-slate-400 max-w-3xl">
-        Everything we just walked through fits on one slide. What separates a model that <em>can</em> reason from one that reliably does
-        is tens of thousands of well-crafted problems paired with cheap, robust verifiers — and the compute to run the loop on them
-        hundreds of thousands of times.
-      </p>
-    </div>
+    <h2 class="text-3xl md:text-4xl font-semibold leading-tight">
+      The loop is easy. The <span class="grad-text">data</span> and the <span class="grad-text">scale</span> are everything.
+    </h2>
 
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-emerald-300 text-xs uppercase tracking-wider mb-1">Scale</div>
-      <div class="font-medium mb-2">Why throwing more compute at it actually helps</div>
-      <div class="text-sm text-slate-300 space-y-2">
-        <p>The loop you saw runs ~10⁵–10⁶ times across thousands of problems. Each step nudges the model only slightly.</p>
-        <p>Behaviors like <em>"wait, let me reconsider"</em> emerge because — eventually — <em>some</em> rollout produced them, got rewarded, and the model learned that strategy worked. More rollouts = more chances to stumble on a useful strategy that can then be reinforced.</p>
-        <p class="text-emerald-200/80 text-xs italic">Verifiable domains scale especially well: the reward signal is a cheap, deterministic function call. You can afford orders of magnitude more rollouts than RLHF, where each scoring step needs a (slow, expensive, gameable) judge model.</p>
+    <div class="grid grid-cols-12 gap-5">
+
+      <!-- ===== Card 1: SCALE — throughput visual ===== -->
+      <div class="col-span-12 md:col-span-4 card p-6 md:p-7 flex flex-col min-h-[540px] transition-all duration-500"
+           :class="s5Revealed >= 1 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-emerald-300 text-xs uppercase tracking-widest mb-2">scale</div>
+        <div class="font-semibold text-xl md:text-2xl mb-5 leading-snug">Verifiers are <em>cheap.</em> That's the whole game.</div>
+
+        <div class="bg-slate-900/60 rounded p-5 flex-1 flex flex-col justify-center">
+          <div class="text-xs uppercase tracking-wider text-slate-500 mb-4">rollouts scored per GPU-second</div>
+
+          <div class="space-y-4">
+            <div class="flex items-center gap-3">
+              <div class="w-28 text-right text-base text-emerald-300">verifier</div>
+              <div class="flex-1 h-6 bg-slate-800 rounded overflow-hidden">
+                <div class="h-full bg-emerald-500 rounded" style="width: 100%"></div>
+              </div>
+              <div class="text-base mono text-emerald-300 w-16">~10⁴</div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <div class="w-28 text-right text-base text-amber-300">LLM judge</div>
+              <div class="flex-1 h-6 bg-slate-800 rounded overflow-hidden">
+                <div class="h-full bg-amber-500 rounded" style="width: 1%"></div>
+              </div>
+              <div class="text-base mono text-amber-300 w-16">~10</div>
+            </div>
+          </div>
+
+          <div class="text-center text-4xl md:text-5xl font-semibold text-slate-100 mt-8">
+            ~<span class="grad-text">1,000×</span>
+          </div>
+          <div class="text-center text-sm text-slate-400 italic mt-2 leading-snug">
+            more rollouts per $ → more chances for emergent behaviors to surface
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-amber-300 text-xs uppercase tracking-wider mb-1">What makes a dataset good</div>
-      <div class="font-medium mb-2">Difficulty calibration beats raw size</div>
-      <div class="text-sm text-slate-300 space-y-2">
-        <p>A problem the model gets right 100% of the time produces no gradient — every rollout already scored 1.0, group mean is 1.0, advantage is 0. A problem it gets right 0% of the time is symmetric: no rollout to learn from.</p>
-        <p>The sweet spot is pass rates roughly <span class="mono text-amber-200">10–70%</span>. Serious shops constantly re-bucket their training pool as the model improves — yesterday's hard problems become today's free-grade examples.</p>
-        <p class="text-amber-200/80 text-xs italic">After difficulty calibration: diverse coverage of the target skill, and verifiers that adversarial rollouts can't game.</p>
+      <!-- ===== Card 2: DATASET QUALITY — sweet-spot strip ===== -->
+      <div class="col-span-12 md:col-span-4 card p-6 md:p-7 flex flex-col min-h-[540px] transition-all duration-500"
+           :class="s5Revealed >= 2 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-amber-300 text-xs uppercase tracking-widest mb-2">dataset quality</div>
+        <div class="font-semibold text-xl md:text-2xl mb-5 leading-snug">Difficulty calibration <em>&gt;</em> raw size.</div>
+
+        <div class="bg-slate-900/60 rounded p-5 flex-1 flex flex-col justify-center">
+          <div class="text-xs uppercase tracking-wider text-slate-500 mb-4 text-center">gradient signal vs problem pass rate</div>
+
+          <div class="flex h-28 rounded overflow-hidden border border-slate-700/60">
+            <div class="w-1/4 bg-rose-500/15 flex flex-col items-center justify-center px-1">
+              <div class="mono text-rose-300 text-base font-semibold">0%</div>
+              <div class="text-xs text-rose-300/70 text-center leading-tight mt-1">all wrong</div>
+            </div>
+            <div class="w-2/4 bg-emerald-500/30 flex flex-col items-center justify-center px-2 border-x border-slate-700/60">
+              <div class="mono text-emerald-200 text-2xl font-bold">10–70%</div>
+              <div class="text-xs text-emerald-200 text-center leading-tight mt-1 font-medium tracking-wider">SWEET SPOT</div>
+            </div>
+            <div class="w-1/4 bg-rose-500/15 flex flex-col items-center justify-center px-1">
+              <div class="mono text-rose-300 text-base font-semibold">100%</div>
+              <div class="text-xs text-rose-300/70 text-center leading-tight mt-1">all right</div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-4 gap-2 mt-4 text-xs text-slate-400 text-center">
+            <div class="col-span-1 leading-tight">no rollout<br>to learn from</div>
+            <div class="col-span-2 text-emerald-300 leading-tight">advantage ≠ 0<br>real gradient</div>
+            <div class="col-span-1 leading-tight">all rollouts tied<br>A = 0</div>
+          </div>
+
+          <div class="text-center text-sm text-slate-400 italic mt-5 leading-snug">
+            Serious shops re-bucket continuously as the model improves.
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div class="col-span-12 md:col-span-4 card p-4">
-      <div class="text-cyan-300 text-xs uppercase tracking-wider mb-1">Where the data actually comes from</div>
-      <div class="font-medium mb-2">Several pipelines, almost always combined</div>
-      <ul class="text-sm text-slate-300 space-y-1.5 list-none">
-        <li><span class="text-cyan-200 font-medium">Existing benchmarks</span> — MATH, GSM8K, competitive-programming archives, Lean / Coq proof sets. Cheap floor, but quickly saturated and contaminated.</li>
-        <li><span class="text-cyan-200 font-medium">Domain experts</span> — olympiad winners, top competitive programmers paid to write fresh problems <em>with</em> reference solutions. Expensive and slow. Frontier labs invest heavily here.</li>
-        <li><span class="text-cyan-200 font-medium">Generated environments</span> — randomly-parameterized problem templates (cf. the market-sizing sample) with auto-verifiers; agentic sandboxes with synthetic tool registries. Cheap, unlimited, but easy to make trivial.</li>
-        <li><span class="text-cyan-200 font-medium">Filtered self-play</span> — model proposes problems, a verifier or stronger judge filters the well-posed ones, RL on the rest. Bootstrap effect.</li>
-        <li><span class="text-cyan-200 font-medium">Process supervision</span> — humans grade <em>intermediate</em> reasoning steps, not just the final answer. Helps with the per-token credit-assignment problem from Act 2.</li>
-      </ul>
-    </div>
+      <!-- ===== Card 3: SOURCES — compact chip list ===== -->
+      <div class="col-span-12 md:col-span-4 card p-6 md:p-7 flex flex-col min-h-[540px] transition-all duration-500"
+           :class="s5Revealed >= 3 ? 'opacity-100' : 'opacity-15 blur-[2px]'">
+        <div class="text-cyan-300 text-xs uppercase tracking-widest mb-2">where data comes from</div>
+        <div class="font-semibold text-xl md:text-2xl mb-5 leading-snug">Five pipelines, almost always mixed.</div>
 
-    <div class="col-span-12 card p-4 text-sm text-slate-300">
-      <div class="font-medium text-violet-200 mb-1">The bottleneck has moved</div>
-      Five years ago the bottleneck for capability was compute and parameter count. Today, for RL'd reasoning, it's increasingly
-      <em>clean (problem, verifier) pairs at scale</em>. The labs racing ahead aren't the ones with the cleverest losses —
-      DPO, GRPO, PPO are all in the open. They're the ones investing the most in dataset construction:
-      paying experts, building generative environments, running large-scale filtering pipelines.
-      The math fits on one slide; the data takes a quarter of a company.
+        <div class="bg-slate-900/60 rounded p-4 flex-1 flex flex-col justify-center gap-2.5">
+
+          <div class="bg-cyan-500/8 border border-cyan-500/30 rounded px-3 py-2.5 flex items-center gap-3">
+            <div class="text-2xl">📚</div>
+            <div class="flex-1">
+              <div class="text-cyan-200 text-base font-medium">benchmarks</div>
+              <div class="text-xs text-slate-400">MATH · GSM8K · IOI · Lean</div>
+            </div>
+            <div class="text-xs text-slate-500 text-right leading-tight">cheap<br>saturates</div>
+          </div>
+
+          <div class="bg-cyan-500/8 border border-cyan-500/30 rounded px-3 py-2.5 flex items-center gap-3">
+            <div class="text-2xl">🧠</div>
+            <div class="flex-1">
+              <div class="text-cyan-200 text-base font-medium">domain experts</div>
+              <div class="text-xs text-slate-400">olympiad winners · IOI medalists</div>
+            </div>
+            <div class="text-xs text-slate-500 text-right leading-tight">slow<br>$$$</div>
+          </div>
+
+          <div class="bg-cyan-500/8 border border-cyan-500/30 rounded px-3 py-2.5 flex items-center gap-3">
+            <div class="text-2xl">⚙</div>
+            <div class="flex-1">
+              <div class="text-cyan-200 text-base font-medium">generated environments</div>
+              <div class="text-xs text-slate-400">templated problems · sandboxes</div>
+            </div>
+            <div class="text-xs text-slate-500 text-right leading-tight">unlimited<br>can be trivial</div>
+          </div>
+
+          <div class="bg-cyan-500/8 border border-cyan-500/30 rounded px-3 py-2.5 flex items-center gap-3">
+            <div class="text-2xl">♻</div>
+            <div class="flex-1">
+              <div class="text-cyan-200 text-base font-medium">filtered self-play</div>
+              <div class="text-xs text-slate-400">model proposes · verifier filters</div>
+            </div>
+            <div class="text-xs text-slate-500 text-right leading-tight">bootstrap</div>
+          </div>
+
+          <div class="bg-cyan-500/8 border border-cyan-500/30 rounded px-3 py-2.5 flex items-center gap-3">
+            <div class="text-2xl">👥</div>
+            <div class="flex-1">
+              <div class="text-cyan-200 text-base font-medium">process supervision</div>
+              <div class="text-xs text-slate-400">humans grade intermediate steps</div>
+            </div>
+            <div class="text-xs text-slate-500 text-right leading-tight">addresses<br>credit assign.</div>
+          </div>
+
+        </div>
+      </div>
     </div>
   </section>
 
@@ -913,7 +1146,7 @@ function rlvrSlide() {
     slide: 1,
     // slide-1 sub-panel: 0..spotCount-1
     spotIdx: 0,
-    spotCount: 1,
+    spotCount: 2,
     showMath: false,
     sample: 'math',
     algo: 'grpo',
@@ -934,51 +1167,80 @@ function rlvrSlide() {
     ffPlaying: false,
     _ffTimer: null,
 
-    slides: ['Where this fits', 'One sample, one step', 'Now do it 100,000 times', "What we don't know", 'The data and the scale'],
+    slides: ['Intro', 'Where this fits', 'One sample, one step', 'Scale up', 'The data and the scale', "What we don't know"],
 
     // ===== slide 1 spotlight =====
-    spotTitles: ['Three training stages, one prompt'],
-    spotBorders: ['border-violet-400/60'],
+    spotTitles: ['Three stages, one prompt — three outputs', 'Three stages, three training data formats'],
+    q4Revealed: 1,
+    q4Count: 4,  // 3 questions + final takeaway
+    q4Titles: ['Q1 · teach vs. elicit', 'Q2 · reward hacking', 'Q3 · transfer beyond verifiable', 'takeaway · verifier ≡ goal'],
+    s5Revealed: 1,
+    s5Count: 3,
+    s5Titles: ['scale · verifiers are cheap', 'dataset quality · difficulty calibration', 'sources · where data comes from'],
 
     // ===== global deck navigation (drives arrow keys + Prev/Next bar) =====
     next($event) {
       if ($event && $event.target && ['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName)) return;
       if (this.slide === 1) {
-        if (this.spotIdx < this.spotCount - 1) this.spotIdx++;
-        else { this.slide = 2; this.step = 1; this._mathRefresh(); }
+        this.slide = 2; this.spotIdx = 0;
       } else if (this.slide === 2) {
+        if (this.spotIdx < this.spotCount - 1) this.spotIdx++;
+        else { this.slide = 3; this.step = 1; this._mathRefresh(); }
+      } else if (this.slide === 3) {
         if (this.step < this.totalSteps()) { this.step++; this._mathRefresh(); }
-        else { this.slide = 3; }
+        else { this.slide = 4; }
+      } else if (this.slide === 5) {
+        if (this.s5Revealed < this.s5Count) this.s5Revealed++;
+        else { this.slide = 6; this.q4Revealed = 1; }
+      } else if (this.slide === 6) {
+        if (this.q4Revealed < this.q4Count) this.q4Revealed++;
+        // slide 6 is the closer; no further advance
       } else if (this.slide < this.slides.length) {
         this.slide++;
+        if (this.slide === 5) this.s5Revealed = 1;
+        if (this.slide === 6) this.q4Revealed = 1;
       }
     },
     prev($event) {
       if ($event && $event.target && ['INPUT','TEXTAREA','SELECT'].includes($event.target.tagName)) return;
-      if (this.slide === 1) {
+      if (this.slide === 2) {
         if (this.spotIdx > 0) this.spotIdx--;
-      } else if (this.slide === 2) {
+        else { this.slide = 1; }
+      } else if (this.slide === 3) {
         if (this.step > 1) { this.step--; this._mathRefresh(); }
-        else { this.slide = 1; this.spotIdx = this.spotCount - 1; }
-      } else if (this.slide > 2) {
+        else { this.slide = 2; this.spotIdx = this.spotCount - 1; }
+      } else if (this.slide === 5) {
+        if (this.s5Revealed > 1) this.s5Revealed--;
+        else { this.slide = 4; }
+      } else if (this.slide === 6) {
+        if (this.q4Revealed > 1) this.q4Revealed--;
+        else { this.slide = 5; this.s5Revealed = this.s5Count; }
+      } else if (this.slide > 1) {
         this.slide--;
-        if (this.slide === 2) { this.step = this.totalSteps(); this._mathRefresh(); }
+        if (this.slide === 3) { this.step = this.totalSteps(); this._mathRefresh(); }
       }
     },
     canNext() {
+      if (this.slide === 2 && this.spotIdx < this.spotCount - 1) return true;
+      if (this.slide === 3 && this.step < this.totalSteps()) return true;
+      if (this.slide === 5 && this.s5Revealed < this.s5Count) return true;
+      if (this.slide === 6 && this.q4Revealed < this.q4Count) return true;
       if (this.slide < this.slides.length) return true;
-      if (this.slide === 2 && this.step < this.totalSteps()) return true;
-      if (this.slide === 1 && this.spotIdx < this.spotCount - 1) return true;
       return false;
     },
     canPrev() {
+      if (this.slide === 2 && this.spotIdx > 0) return true;
+      if (this.slide === 5 && this.s5Revealed > 1) return true;
+      if (this.slide === 6 && this.q4Revealed > 1) return true;
       if (this.slide > 1) return true;
-      if (this.slide === 1 && this.spotIdx > 0) return true;
       return false;
     },
     positionLabel() {
-      if (this.slide === 1) return `Slide 1 · ${this.spotTitles[this.spotIdx]}`;
-      if (this.slide === 2) return `Slide 2 · Step ${this.step}/${this.totalSteps()} · ${this.stepName(this.step)}`;
+      if (this.slide === 1) return `Slide 1 · Intro`;
+      if (this.slide === 2) return `Slide 2 · ${this.spotTitles[this.spotIdx]}`;
+      if (this.slide === 3) return `Slide 3 · Step ${this.step}/${this.totalSteps()} · ${this.stepName(this.step)}`;
+      if (this.slide === 5) return `Slide 5 · ${this.s5Titles[this.s5Revealed-1]}  (revealed ${this.s5Revealed}/${this.s5Count})`;
+      if (this.slide === 6) return `Slide 6 · ${this.q4Titles[this.q4Revealed-1]}  (revealed ${this.q4Revealed}/${this.q4Count})`;
       return `Slide ${this.slide} · ${this.slides[this.slide-1]}`;
     },
     algos: [
